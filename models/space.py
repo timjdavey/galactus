@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 
 class Space:
-    def __init__(self, masses, distances=None, G=1):
+    def __init__(self, masses, distances=None, G=1, cp=None):
         """
         Basic 
         """
@@ -13,6 +13,7 @@ class Space:
         self.points = points
         self.masses = np.array(masses)
         self.G = G
+        self.cp = cp
         
         for i, mass in enumerate(self.masses):
             if mass.shape != self.points:
@@ -61,8 +62,11 @@ class Space:
         gridxs = []
         gridys = []
         gridabs = []
+        total = len(self.coord_x)
         for ix, x in enumerate(self.coord_x):
+            if self.cp is not None: self.cp(total-ix)
             for iy, y in enumerate(self.coord_y):
+                
                 
                 gx, gy, ab = blank.copy(), blank.copy(), blank.copy()
                 M = mass[iy][ix]
@@ -88,6 +92,8 @@ class Space:
                 gridxs.append(gx)
                 gridys.append(gy)
                 gridabs.append(ab)
+
+        if self.cp is not None: self.cp('')
                 
         self._fields = {
             'mass': mass,
