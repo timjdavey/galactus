@@ -1,11 +1,48 @@
 import numpy as np
 import pandas as pd
 import seaborn as sns
-from functools import cached_property
+from functools import cached_property, partial
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 
 from .space import Space
+
+
+def gravity_worker(observed_points, nonzero_masses, mass_sum, space_scale):
+    """
+    Multiprocessing function for calculating gravity
+    for all the non_zero masses within mass_sum
+    and for a specific `observed_points` in space
+    """
+
+    for mass_points in nonzero_masses:
+    
+        M = mass_sum[tuple(mass_points)]
+        mass_distances = np.array(mass_points)*space_scale
+        
+        if np.array_equal(mass_points,observed_points):
+        # the mass of a certain grid point
+        # has no impact on it's own grid point
+        # to avoid infinities etc
+        # so leave as 0
+            pass
+        else:
+            deltas = np.array(observed_points)*space_scale-mass_distances
+        
+            r2 = np.sum([d**2 for d in deltas])
+            r = r2**0.5
+            F = M/r2
+        
+            ijk = tuple(observed_points)
+            results = {}
+            for i, delta in enumerate(deltas):
+                g = -F*delta/r
+                results[i] = g
+                results['a%s' % i] = np.abs(g)
+        
+            results['abs'] = np.abs(F)
+
+    return (ijk, results)
 
 
 
@@ -15,9 +52,12 @@ class Simulation:
     """
     def __init__(self, masses, space, G=1, cp=None):
         masses = np.array(masses)
-        for i, mass in enumerate(masses):
-            if mass.shape != space.points:
-                raise ValueError("mass %s shape does not match space grid (%s, %s)" % (i, mass.shape, space.points))
+        if masses.shape == tuple(space.points):
+            masses = [masses,]
+        else:
+            for i, mass in enumerate(masses):
+                if mass.shape != space.points:
+                    raise ValueError("mass %s shape does not match space grid (%s, %s)" % (i, mass.shape, space.points))
 
         self.mass_components = masses
         self.space = space
@@ -26,7 +66,7 @@ class Simulation:
 
         self.sums = {'mass': np.sum(masses, axis=0)}
 
-    def analyse(self, sub_list=None, imod=100):
+    def analyse(self, sub_list=None, imod=100, multi=False):
         """
         Does the main bulk of the analysis
 
@@ -58,42 +98,25 @@ class Simulation:
         # for each point in space impacting others,
         # work out the vector & scalar force
         # observed for each other point in space
-    
+
+
         # only need to do for points with nonzero mass
-        nonzero_masses = np.nonzero(mass_sum)
-        total_mass_points = len(nonzero_masses[0])
-        for i in range(total_mass_points):
-            mass_points = tuple([nonzero_masses[d][i] for d in space.dimensions])
-            
-            if i % imod == 0:
-                self.log("%s percent analysed" % (i/total_mass_points))
-            
-            M = mass_sum[mass_points]
-            mass_distances = np.array(mass_points)*space.scale
-    
-            for observed_points in point_list:
+        nonzero_masses = np.transpose(np.nonzero(mass_sum))
         
-                if np.array_equal(mass_points,observed_points):
-                # the mass of a certain grid point
-                # has no impact on it's own grid point
-                # to avoid infinities etc
-                # so leave as 0
-                    pass
-                else:
-                    deltas = np.array(observed_points)*space.scale-mass_distances
+        worker = partial(gravity_worker,
+            nonzero_masses=nonzero_masses,
+            mass_sum=mass_sum,
+            space_scale=space.scale)
+
+        if multi:
+            from multiprocessing import Pool
+            results = Pool().map(worker, point_list)
+        else:
+            results = [worker(op) for op in point_list]
         
-                    r2 = np.sum([d**2 for d in deltas])
-                    r = r2**0.5
-        
-                    F = self.G*M/r2
-        
-                    ijk = tuple(observed_points)
-                    for i, delta in enumerate(deltas):
-                        g = -F*delta/r
-                        fields[i][ijk] += g
-                        fields['a%s' % i][ijk] += np.abs(g)
-        
-                    fields['abs'][ijk] += np.abs(F)
+        for ijk, r in results:
+            for k,v in r.items():
+                fields[k][tuple(ijk)] += v
     
         self.log('sum')
         fields['mass'] = sums['mass']
