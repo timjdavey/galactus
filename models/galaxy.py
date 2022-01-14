@@ -38,7 +38,7 @@ class Galaxy(Simulation):
     https://iopscience.iop.org/article/10.3847/1538-4357/aaf648/pdf (table 1)
 
     """
-    def __init__(self, points, radius=1, cp=None, generators=None, *args, **kwargs):
+    def __init__(self, profiles, points, radius=1, cp=None, *args, **kwargs):
         self.points = points
         self.radius = radius
         self.scale = radius*2/points
@@ -54,13 +54,21 @@ class Galaxy(Simulation):
             c=space.center*space.scale,
             cp=self.cp)
 
-        if generators is None: generators = [buldge, thick, thin]
+        labels = []
+        generators = []
+        for p in profiles:
+            labels.append(p['name'])
+            generators.append(partial(p['func'], **p['params']))
 
+        self.mass_labels = labels
         self.log('gen masses')
         masses = Pool().map(worker, generators)
 
         self.log()
         super().__init__(masses, space, cp=cp, *args, **kwargs)
+
+def point(R, z, Rp, Zp, m):
+    return m if R == Rp and Z == Zp else 0
 
 def buldge(R, z, p0, q, rcut, r0, alpha):
     rprime = R**2+(z/q)**2
