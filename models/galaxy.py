@@ -6,7 +6,7 @@ from .simulation import Simulation
 
 def mass_worker(func, volume, space_list, space_scale, c, cp):
 
-    if cp is not None: cp("Start %s" %  func.__name__)
+    if cp is not None: cp("Start %s" %  func.func.__name__)
 
     for ijk in space_list:
 
@@ -16,7 +16,7 @@ def mass_worker(func, volume, space_list, space_scale, c, cp):
         density = func(r,z)
         volume[tuple(ijk)] = density*space_scale # mass within grid square
     
-    if cp is not None: cp("Finished %s" %  func.__name__)
+    if cp is not None: cp("Finished %s" %  func.func.__name__)
 
     return volume
 
