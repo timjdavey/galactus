@@ -67,7 +67,7 @@ class Simulation:
     """
     Main simulation object
     """
-    def __init__(self, masses, space, G=1, cp=None):
+    def __init__(self, masses, space, mass_labels=None, G=1, cp=None):
         masses = np.array(masses)
         if masses.shape == tuple(space.points):
             masses = [masses,]
@@ -80,12 +80,14 @@ class Simulation:
         self.space = space
         self.G = G
         self.cp = cp
+        self.mass_labels = mass_labels
 
     def analyse(self, sub_list=None, min_mass=0):
         """
         Does the main bulk of the analysis
 
         :sub_list: array_like of points to calculate for, rather than whole of space
+        :min_mass: 0, only calculate for points with mass greater than this value
         """
 
         # first assumption is all masses
@@ -149,7 +151,11 @@ class Simulation:
             sums[di] = np.sum(all_dimension, axis=0)
         
         self.sums = sums
+
+        self.mass_list = mass_list
+        self.sub_list = sub_list
         self.log()
+
 
     def log(self, *args, **kwargs):
         """ Outputs to notebook """
@@ -262,7 +268,13 @@ class Simulation:
             square=True, norm=LogNorm(),
             xticklabels=self.space.x, yticklabels=self.space.coords[1]*self.space.scale)
 
+    def save(self, filename):
+        import pickle
+        print("Saving %s" % filename)
+        with open('%s.pickle' % filename, 'wb') as fh:
+            pickle.dump(self, fh)
 
+        print("Complete")
 
 
 

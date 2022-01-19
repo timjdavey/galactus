@@ -43,6 +43,7 @@ class Galaxy(Simulation):
         self.radius = radius
         self.scale = radius*2/points
         self.cp = cp
+        self.profiles = profiles
 
         self.log('gen space')
         space = Space((self.points, self.points, self.points), self.scale)
@@ -54,30 +55,42 @@ class Galaxy(Simulation):
             c=space.center*space.scale,
             cp=self.cp)
 
-        labels = []
-        generators = []
-        for p in profiles:
-            labels.append(p['name'])
-            generators.append(partial(p['func'], **p['params']))
+        fl = dict([(f.__name__, f) for f in (buldge, disk)])
+        generators = [partial(fl[p['func']], **p['params']) for p in profiles.values()]
 
-        self.mass_labels = labels
         self.log('gen masses')
         masses = Pool().map(worker, generators)
 
         self.log()
-        super().__init__(masses, space, cp=cp, *args, **kwargs)
+        super().__init__(masses, space, cp=cp, mass_labels=list(profiles.keys()), *args, **kwargs)
 
-def point(R, z, Rp, Zp, m):
-    return m if R == Rp and Z == Zp else 0
 
 def buldge(R, z, p0, q, rcut, r0, alpha):
-    rprime = R**2+(z/q)**2
-    exponent = np.exp(-(rprime/(rcut**2)))
-    denom = (1+(rprime**0.5)/r0)**alpha
-    return p0*exponent/denom
+    """
+    Equation 1 & 2
+    https://academic.oup.com/mnras/article/414/3/2446/1042117?login=true#m1
+    """
+    rprime = (R**2+(z/q)**2)**0.5
+    expo = (rprime/rcut)**2
+    denom = 1+(rprime/r0)**alpha
+    return p0*np.exp(-expo)/denom
 
-def disk(R, z, zd, sig0, Rd):
-    exponent = np.exp((-np.abs(z)/zd)-(R/Rd))
-    return sig0*exponent/(2*zd)
-    
+def disk(R, z, zd, sig0, Rd, Rhole=0):
+    """
+    Equation 3 from
+    https://academic.oup.com/mnras/article/414/3/2446/1042117?login=true#m1
+
+    Plus Rhole from
+    https://arxiv.org/pdf/1604.01216.pdf (eq 12)
+    """
+    expo = -(np.abs(z)/zd)-(R/Rd)
+    if R > 0 and Rhole > 0: expo -= Rhole/R
+    return sig0*np.exp(expo)/(2*zd)
+
+def disk_mass(sig0, Rd):
+    """
+    Section 2.2
+    https://academic.oup.com/mnras/article/414/3/2446/1042117?login=true#m1
+    """
+    return 2*np.pi*sig0*(Rd**2)
 
