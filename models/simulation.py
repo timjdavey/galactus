@@ -21,7 +21,13 @@ def gravity_worker(iop, total, nonzero_masses, mass_components, space_scale, cp)
     if cp is not None: cp("%s of %s, %.1f%%" % (i, total, i*100/total))
 
     # save results by mass component
-    
+    results = {}
+    for mi in range(len(mass_components)):
+        rr = {'F': 0}
+        for di in range(len(observed_points)):
+            rr[di] = 0
+            rr['a%s' % di] = 0
+        results[mi] = rr
 
     # calculate for all nonzero_mass points
     for mass_points in nonzero_masses:
@@ -54,66 +60,6 @@ def gravity_worker(iop, total, nonzero_masses, mass_components, space_scale, cp)
 
     return (ijk, results)
 
-
-def gen_results_dict(dimension_count):
-    rr = {'F': 0}
-    for di in range(dimension_count):
-        rr[di] = 0
-        rr['a%s' % di] = 0
-    return rr
-
-
-def slim_worker(mass_points, calc_points, masses, space_scale):
-
-    template = gen_results_dict(len(calc_points))
-
-    if np.array_equal(mass_points, calc_points):
-    # the mass of a certain grid point
-    # has no impact on it's own grid point
-    # to avoid infinities etc
-    # so leave as 0
-        return (mass_points, calc_points, [template.copy() for m in range(len(masses))])
-    else:
-        results = []
-        # distance deltas
-        deltas = (np.array(calc_points)-np.array(mass_points))*space_scale
-        r2 = np.sum([d**2 for d in deltas])
-        r = r2**0.5
-
-        for M in masses:
-            mass_results = template.copy()
-            F = M/r2
-        
-            for di, delta in enumerate(deltas):
-                g = -F*delta/r
-                mass_results[di] += g
-                mass_results['a%s' % di] += np.abs(g)
-        
-            mass_results['F'] += np.abs(F)
-            results.append(mass_results)
-
-        return (mass_points, calc_points, results)
-
-
-class GravIter:
-    def __init__(self, mass_points, calc_points, masses):
-        self. = np.array(np.meshgrid(len(mass_points), len(calc_points))).T.reshape(-1,2)
-        self.mass_points = mass_points
-        self.calc_points = calc_points
-        self.masses = masses
-
-    def __iter__(self):
-        self.i = 0
-        return self
-
-    def __next__(self):
-        i = self.i
-        self.i = i+1
-        mijk = tuple(mass_points[i])
-        try:
-            return (mijk, calc_points[i], masses[mijk])
-        except IndexError:
-            raise StopIteration
 
 
 class Simulation:
