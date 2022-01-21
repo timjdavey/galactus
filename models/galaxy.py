@@ -1,24 +1,35 @@
 import numpy as np
+import time
 from functools import partial
-from multiprocessing import Pool
 from .space import Space
 from .simulation import Simulation
+from .pool import pool
 
-def mass_worker(func, volume, space_list, space_scale, c, cp):
 
-    if cp is not None: cp("Start %s" %  func.func.__name__)
-
-    for ijk in space_list:
-
-        d = ijk*space_scale
-        z = np.abs(c[0] - d[0])
-        r = ((c[1]-d[1])**2 + (c[2]-d[2])**2)**0.5
-        density = func(r,z)
-        volume[tuple(ijk)] = density*space_scale # mass within grid square
+def rz(ijk, space_scale, c):
+    """
+    Calculates r & z.
+    """
+    d = ijk*space_scale
+    z = np.abs(c[0] - d[0])
+    r = ((c[1]-d[1])**2 + (c[2]-d[2])**2)**0.5
+    return r,z
     
-    if cp is not None: cp("Finished %s" %  func.func.__name__)
 
-    return volume
+def mass_worker(ijk, funcs, space_scale, vol_per_grid, c, combine):
+    """
+    Calculates the mass for a given point in space.
+
+    :combine: combines all the masses into a single mass.
+    """
+    if combine:
+        density = 0
+        for func in funcs:
+            density += func(*rz(ijk, space_scale, c))
+        return (ijk, density*vol_per_grid)
+    else:
+        masses = [func(*rz(ijk, space_scale, c))*vol_per_grid for func in funcs]
+        return (ijk, masses)
 
 
 class Galaxy(Simulation):
@@ -38,7 +49,7 @@ class Galaxy(Simulation):
     https://iopscience.iop.org/article/10.3847/1538-4357/aaf648/pdf (table 1)
 
     """
-    def __init__(self, profiles, points, radius=1, cp=None, *args, **kwargs):
+    def __init__(self, profiles, points, radius=1, zcut=5, multi=True, cp=None, combine_masses=False, *args, **kwargs):
         self.points = points
         self.radius = radius
         self.scale = radius*2/points
@@ -46,24 +57,51 @@ class Galaxy(Simulation):
         self.profiles = profiles
 
         self.log('gen space')
-        space = Space((self.points, self.points, self.points), self.scale)
-
-        worker = partial(mass_worker,
-            volume=space.blank(),
-            space_list=space.list,
-            space_scale=space.scale,
-            c=space.center*space.scale,
-            cp=self.cp)
+        space = Space((int(self.points/zcut), self.points, self.points), self.scale)
 
         fl = dict([(f.__name__, f) for f in (buldge, disk)])
-        generators = [partial(fl[p['func']], **p['params']) for p in profiles.values()]
+        funcs = [partial(fl[p['func']], **p['params']) for p in profiles.values()]
 
-        self.log('gen masses')
-        masses = Pool().map(worker, generators)
+        worker = partial(mass_worker,
+            funcs=funcs,
+            space_scale=space.scale,
+            vol_per_grid=space.scale**3,
+            c=space.center*space.scale,
+            combine=combine_masses)
+        generators = space.list
+        mass_labels = ['combined',] if combine_masses else list(profiles.keys())
 
-        self.log()
-        super().__init__(masses, space, cp=cp, mass_labels=list(profiles.keys()), *args, **kwargs)
+        self.log('gen masses for %s points' % space.count)
+        tic = time.perf_counter()
+        results = pool(worker, generators, multi, cp)
 
+        self.log('moving masses into volume matrices')
+        masses = []
+        for i in range(len(funcs)):
+            masses.append(space.blank())
+        
+        for ijk, mres in results:
+            tp = tuple(ijk)
+            for i, m in enumerate(mres):
+                masses[i][tp] = m
+        toc = time.perf_counter()
+        self.log("completed in %s seconds" % (toc-tic))
+        super().__init__(masses, space, cp=cp, mass_labels=mass_labels, *args, **kwargs)
+
+    def dataframe(self):
+        """ Returns analysis as a dataframe, adding the radius """
+        df = super().dataframe()
+        space_scale = self.space.scale
+        c = self.space.center*space_scale
+        
+        rs, zs = [], []
+        for i, ijk in df['ijk'].items():
+            r,z = rz(np.array(ijk), space_scale, c)
+            rs.append(r)
+            zs.append(z)
+        df['rs'] = rs
+        df['zs'] = zs
+        return df
 
 def buldge(R, z, p0, q, rcut, r0, alpha):
     """

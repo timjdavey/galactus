@@ -12,8 +12,13 @@ class Space:
 
     def blank(self):
         """ An empty array of dimensions of space """
-        return np.zeros(self.points)
+        return np.zeros(self.points)#, dtype=np.dtype('float32'))
 
+    @cached_property
+    def count(self):
+        """ Total number of points in space """
+        return np.product(self.points)
+    
     @cached_property
     def dimensions(self):
         """ Lists through the dimensions e.g. 0,1,2 for 3d space """
@@ -39,7 +44,7 @@ class Space:
     @cached_property
     def radius_list(self):
         """ A list of all coords on the radius of a galaxy """
-        return [(i,self.center[1],self.center[2]) for i in self.coords[0][:int(self.points[0]/2)+1]]
+        return [(self.center[0],self.center[1],i) for i in self.coords[2][int(self.points[2]/2):]]
 
     @cached_property
     def list(self):

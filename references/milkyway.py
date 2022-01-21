@@ -54,6 +54,7 @@ profiles['mcmillian2011best']['thin']['params']['sig0'] = 816.6*(10**6)
 profiles['mcmillian2011best']['thin']['params']['Rd'] = 2.90
 
 
+
 # Referenced in Mcmillian
 # solar distance
 # Gillessen et al. (2009)
@@ -110,7 +111,7 @@ profiles['huang2016'] = {
             'alpha':1.8, # (beta)
         },
         'func': 'buldge',
-        'mass': 8.9*(10**9),
+        'mass': [8.9*(10**9),(8.9*(10**9))*1.1,(8.9*(10**9))*0.9],
     },
     'thin': {
         'params': {
@@ -123,7 +124,7 @@ profiles['huang2016'] = {
     },
     'thick': {
         'params': {
-            'zd': 1, # adopted
+            'zd': 1, # so standardise
             'sig0':30.4*(10**6), # table 4
             'Rd':5.68, # table 4
         },
@@ -132,7 +133,7 @@ profiles['huang2016'] = {
     },
     'gas': {
         'params': {
-            'zd': 1, # adopted
+            'zd': 1, # so standardise
             'sig0':134.3*(10**6), # table 4
             'Rd':5.26, # table 4
             'Rhole': 4, # section 6.1

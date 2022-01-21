@@ -3,10 +3,9 @@ import pandas as pd
 import seaborn as sns
 import copy
 import matplotlib.pyplot as plt
-from multiprocessing import Pool
 from functools import cached_property, partial
 from matplotlib.colors import LogNorm
-
+from .pool import pool
 from .space import Space
 
 
@@ -22,18 +21,10 @@ def gravity_worker(iop, total, nonzero_masses, mass_components, space_scale, cp)
     if cp is not None: cp("%s of %s, %.1f%%" % (i, total, i*100/total))
 
     # save results by mass component
-    results = {}
-    for mi in range(len(mass_components)):
-        rr = {'F': 0}
-        for di in range(len(observed_points)):
-            rr[di] = 0
-            rr['a%s' % di] = 0
-        results[mi] = rr
+    
 
     # calculate for all nonzero_mass points
     for mass_points in nonzero_masses:
-    
-        mass_distance = np.array(mass_points)*space_scale
         
         if np.array_equal(mass_points,observed_points):
         # the mass of a certain grid point
@@ -42,6 +33,8 @@ def gravity_worker(iop, total, nonzero_masses, mass_components, space_scale, cp)
         # so leave as 0
             pass
         else:
+            mass_distance = np.array(mass_points)*space_scale
+
             deltas = observed_distance-mass_distance
         
             r2 = np.sum([d**2 for d in deltas])
@@ -61,6 +54,66 @@ def gravity_worker(iop, total, nonzero_masses, mass_components, space_scale, cp)
 
     return (ijk, results)
 
+
+def gen_results_dict(dimension_count):
+    rr = {'F': 0}
+    for di in range(dimension_count):
+        rr[di] = 0
+        rr['a%s' % di] = 0
+    return rr
+
+
+def slim_worker(mass_points, calc_points, masses, space_scale):
+
+    template = gen_results_dict(len(calc_points))
+
+    if np.array_equal(mass_points, calc_points):
+    # the mass of a certain grid point
+    # has no impact on it's own grid point
+    # to avoid infinities etc
+    # so leave as 0
+        return (mass_points, calc_points, [template.copy() for m in range(len(masses))])
+    else:
+        results = []
+        # distance deltas
+        deltas = (np.array(calc_points)-np.array(mass_points))*space_scale
+        r2 = np.sum([d**2 for d in deltas])
+        r = r2**0.5
+
+        for M in masses:
+            mass_results = template.copy()
+            F = M/r2
+        
+            for di, delta in enumerate(deltas):
+                g = -F*delta/r
+                mass_results[di] += g
+                mass_results['a%s' % di] += np.abs(g)
+        
+            mass_results['F'] += np.abs(F)
+            results.append(mass_results)
+
+        return (mass_points, calc_points, results)
+
+
+class GravIter:
+    def __init__(self, mass_points, calc_points, masses):
+        self. = np.array(np.meshgrid(len(mass_points), len(calc_points))).T.reshape(-1,2)
+        self.mass_points = mass_points
+        self.calc_points = calc_points
+        self.masses = masses
+
+    def __iter__(self):
+        self.i = 0
+        return self
+
+    def __next__(self):
+        i = self.i
+        self.i = i+1
+        mijk = tuple(mass_points[i])
+        try:
+            return (mijk, calc_points[i], masses[mijk])
+        except IndexError:
+            raise StopIteration
 
 
 class Simulation:
@@ -82,18 +135,34 @@ class Simulation:
         self.cp = cp
         self.mass_labels = mass_labels
 
-    def analyse(self, sub_list=None, min_mass=0):
+    def analyse(self, sub_list=None, min_mass=0, shortcut=False, multi=True):
         """
         Does the main bulk of the analysis
 
         :sub_list: array_like of points to calculate for, rather than whole of space
         :min_mass: 0, only calculate for points with mass greater than this value
+        :shortcut: to use with radius_results, where you don't need full 3d makeup
+
+        first assumption is all masses
+        in each grid point
+        are summed to a single mass for that grid
+        so densities are treated normally
+
+        then calculates the affect of the mass in
+        each grid point on all other grid points
+    
+        we approximate the mass within a given grid
+        to be the center of mass for the grid
+        but outside of each grid, we never make that assumption
+
+        for each point in space impacting others,
+        work out the vector & scalar force
+        observed for each other point in space
+
+
+        only need to do for points with nonzero mass
         """
 
-        # first assumption is all masses
-        # in each grid point
-        # are summed to a single mass for that grid
-        # so densities are treated normally
         space = self.space
         
         if sub_list is not None:
@@ -101,31 +170,7 @@ class Simulation:
         else:
             point_list = space.list
     
-        # then calculates the affect of the mass in
-        # each grid point on all other grid points
-    
-        # we approximate the mass within a given grid
-        # to be the center of mass for the grid
-        # but outside of each grid, we never make that assumption
-    
-        fields = dict([(d, space.blank()) for d in space.dimensions])
-        for d in space.dimensions:
-            fields['a%s' % d] = space.blank()
-        fields['F'] = space.blank()
-
-        # fields by mass component
-        mass_fields = {}
-        for mi in range(len(self.mass_components)):
-            mass_fields[mi] = copy.deepcopy(fields)
-
-        # for each point in space impacting others,
-        # work out the vector & scalar force
-        # observed for each other point in space
-
-
-        # only need to do for points with nonzero mass
-        mass_sum = np.sum(self.mass_components, axis=0)
-
+        mass_sum = self.mass_sum()
         mass_list = np.transpose(np.where(mass_sum > min_mass))
         
         worker = partial(gravity_worker,
@@ -135,27 +180,80 @@ class Simulation:
             space_scale=space.scale,
             cp=self.cp)
 
-        result_list = Pool().map(worker, enumerate(point_list))
+        result_list = pool(worker, enumerate(point_list), multi)
 
-        self.log('combine point results')
-        for ijk, mass_results in result_list:
-            for mi, dimension_results in mass_results.items():
-                for k,v in dimension_results.items():
-                    mass_fields[mi][k][tuple(ijk)] += v
-        self.fields = mass_fields
-
-        self.log('sum results')
-        sums = {'mass': mass_sum}
-        for di in dimension_results.keys():
-            all_dimension = [mass_fields[mi][di] for mi in range(len(self.mass_components))]
-            sums[di] = np.sum(all_dimension, axis=0)
-        
-        self.sums = sums
-
+        self.result_list = result_list
         self.mass_list = mass_list
         self.sub_list = sub_list
-        self.log()
 
+        self.__fields = None
+        self.__sums = None
+        self.__dataframe = None
+
+    @property
+    def fields(self):
+        if self.__fields is None:
+            space = self.space
+            fields = dict([(d, space.blank()) for d in space.dimensions])
+            for d in self.space.dimensions:
+                fields['a%s' % d] = space.blank()
+            fields['F'] = space.blank()
+        
+            # fields by mass component
+            mass_fields = {}
+            for mi in range(len(self.mass_components)):
+                mass_fields[mi] = copy.deepcopy(fields)
+        
+            self.log('combine point results')
+            for ijk, mass_results in self.result_list:
+                for mi, dimension_results in mass_results.items():
+                    for k,v in dimension_results.items():
+                        mass_fields[mi][k][tuple(ijk)] += v
+            self.__fields = mass_fields
+        
+            self.log('sum results')
+            sums = {'mass': self.mass_sum()}
+            for di in dimension_results.keys():
+                all_dimension = [mass_fields[mi][di] for mi in range(len(self.mass_components))]
+                sums[di] = np.sum(all_dimension, axis=0)
+            
+            self.__sums = sums
+        return self.__fields
+
+    @property
+    def sums(self):
+        if self.__sums is None:
+            self.fields
+        return self.__sums
+
+    def dataframe(self):
+        results = []
+        for ijk, result in self.result_list:
+            sums = {
+                'z': ijk[0],
+                'y': ijk[1],
+                'x': ijk[2],
+                'ijk': ijk,
+                'component': 'sum',
+            }
+            for mass_index, mass_res in result.items():
+                rr = sums.copy()
+                if self.mass_labels is not None:
+                    rr['component'] = self.mass_labels[mass_index] 
+                else:
+                    rr['component'] = mass_index
+                for k,v in mass_res.items():
+                    rr[k] = v
+                    if mass_index == 0:
+                        sums[k] = v
+                    else:
+                        sums[k] += v
+                results.append(rr)
+            results.append(sums)
+        return pd.DataFrame(results)
+
+    def mass_sum(self):
+        return np.sum(self.mass_components, axis=0)
 
     def log(self, *args, **kwargs):
         """ Outputs to notebook """
@@ -181,7 +279,7 @@ class Simulation:
         self._sums = copy.deepcopy(dic)
         for key, value in dic.items():
             dic[key] = np.rot90(dic[key], axes=(d1,d2))
-        self.sums = dic
+        self.__sums = dic
 
 
         # space
