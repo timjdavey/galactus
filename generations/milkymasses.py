@@ -8,7 +8,7 @@ from references.milkyway import profiles
 if __name__ == '__main__':
     pname = 'huang2016'
 
-    mass_points = 500
+    mass_points = 100
     calc_points = 10
     
     mass_radius = 50
@@ -19,4 +19,5 @@ if __name__ == '__main__':
     percent = calc_radius/mass_radius
     
     sim = Galaxy(profiles=profiles[pname], points=mass_points, radius=mass_radius, cp=print)
+    sim.analyse(sim.space.radius_list[:20])
     sim.save("%s_%s_%s" % (name, pname, mass_points))

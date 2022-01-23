@@ -1,7 +1,8 @@
+import copy
+import time
 import numpy as np
 import pandas as pd
 import seaborn as sns
-import copy
 import matplotlib.pyplot as plt
 from functools import cached_property, partial
 from matplotlib.colors import LogNorm
@@ -62,6 +63,59 @@ def gravity_worker(iop, total, nonzero_masses, mass_components, space_scale, cp)
 
 
 
+def grid_worker(args, observed_distance):
+    mass_distance, masses = args
+    
+    # for the same point
+    # return 0s
+    if np.array_equal(mass_distance,observed_distance):
+        return np.zeros((len(masses), len(mass_distance)*2+1))
+    else:
+        deltas = observed_distance-mass_distance
+        r2 = np.sum([d**2 for d in deltas])
+        r = r2**0.5
+    
+        results = []
+        for M in masses:
+            F = M/r2
+            res = []
+            for di, delta in enumerate(deltas):
+                g = -F*delta/r
+                res.append(g)
+                res.append(np.abs(g))
+            res.append(F)
+            results.append(res)
+        return results
+
+
+class MassIter:
+    def __init__(self, mass_list, masses, space_scale):
+        self.mass_list = mass_list
+        self.masses = masses
+        self.space_scale = space_scale
+
+    def __iter__(self):
+        self.i = 0
+        return self
+
+    def __next__(self):
+        i = self.i
+        self.i += 1
+        try:
+            mp = tuple(self.mass_list[i])
+        except IndexError:
+            raise StopIteration
+        else:
+            mass_distance = np.array(mp)*self.space_scale
+            Ms = tuple([m[mp] for m in self.masses])
+            return (mass_distance, Ms)
+
+    def reset(self):
+        self.i = 0
+
+
+
+
 class Simulation:
     """
     Main simulation object
@@ -75,19 +129,19 @@ class Simulation:
                 if mass.shape != space.points:
                     raise ValueError("mass %s shape does not match space grid (%s, %s)" % (i, mass.shape, space.points))
 
+        masses.flags.writeable = False # makes masses a constant
         self.mass_components = masses
         self.space = space
         self.G = G
         self.cp = cp
         self.mass_labels = mass_labels
 
-    def analyse(self, sub_list=None, min_mass=0, shortcut=False, multi=True):
+    def analyse(self, sub_list=None, min_mass=0, alt=False, multi=True):
         """
         Does the main bulk of the analysis
 
         :sub_list: array_like of points to calculate for, rather than whole of space
         :min_mass: 0, only calculate for points with mass greater than this value
-        :shortcut: to use with radius_results, where you don't need full 3d makeup
 
         first assumption is all masses
         in each grid point
@@ -110,23 +164,39 @@ class Simulation:
         """
 
         space = self.space
-        
-        if sub_list is not None:
-            point_list = sub_list
-        else:
-            point_list = space.list
-    
+        point_list = space.list if sub_list is None else sub_list
         mass_sum = self.mass_sum()
         mass_list = np.transpose(np.where(mass_sum > min_mass))
         
-        worker = partial(gravity_worker,
-            total=len(point_list),
-            nonzero_masses=mass_list,
-            mass_components=self.mass_components,
-            space_scale=space.scale,
-            cp=self.cp)
+        tic_t = time.perf_counter()
+        if alt:
+            result_list = []
+            total = len(point_list)
+            iterator = MassIter(mass_list, self.mass_components, space.scale)
+            
+            for i, observed_points in enumerate(point_list):
+                tic = time.perf_counter()
+                self.log("%s of %s calculation points %s%%" % (i, total, i*100/total))
+                worker = partial(grid_worker,
+                    observed_distance=np.array(observed_points)*space.scale)
+                result_list.append(np.sum(pool(worker, iterator), axis=0))
+                iterator.reset()
+                toc = time.perf_counter()
+                self.log("%s seconds" % (toc-tic))
 
-        result_list = pool(worker, enumerate(point_list), multi)
+
+        else:
+            worker = partial(gravity_worker,
+                total=len(point_list),
+                nonzero_masses=mass_list,
+                mass_components=self.mass_components,
+                space_scale=space.scale,
+                cp=self.cp)
+    
+            result_list = pool(worker, enumerate(point_list), multi)
+        
+        toc_t = time.perf_counter()
+        self.log("%s total seconds" % (toc_t-tic_t))
 
         self.result_list = result_list
         self.mass_list = mass_list
