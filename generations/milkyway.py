@@ -5,19 +5,18 @@ from models.galaxy import Galaxy
 from references.milkyway import profiles
 
 if __name__ == '__main__':
-    total_points = 300
-    total_radius = 40
+    mass_points = 600
+    calc_points = 20
+    
+    mass_radius = 50
     calc_radius = 25
+    
     minimum_mass = 0.00001
-
-    name = 'milky_'
-    percent = calc_radius/total_radius
-
-    for pname, pfiles in [('huang2016', profiles['huang2016']),]:#profiles.items():
+    name = 'milky'
+    
+    for pname in ('mcmillian2011best','huang2016'):
+        pfiles = profiles[pname]
         print("Starting %s" % pname)
-        sim = Galaxy(profiles=pfiles, points=total_points, radius=total_radius, cp=print)
-        rl = sim.space.radius_list
-        sim.analyse(rl[int(len(rl)*(1-percent)):], min_mass=minimum_mass)
-        sim.rotate('x','z')
-        sim.name = pname
-        sim.save("%s%s100" % (name, pname))
+        sim = Galaxy(profiles=pfiles, points=mass_points, radius=mass_radius, cp=print)
+        sim.analyse(sim.radius_points(calc_radius, calc_points), minimum_mass)
+        sim.save("%s_%s_%s" % (name, pname, mass_points))

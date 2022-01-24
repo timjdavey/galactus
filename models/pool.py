@@ -6,7 +6,8 @@ def pool(worker, worker_list, multi=True, cp=None):
     """
     if multi:
         if cp is not None: cp("%s Pools" % len(worker_list))
-        return Pool().map(worker, worker_list)
+        with Pool() as pl:
+            return pl.map(worker, worker_list)
     else:
         if cp is not None: cp("%s sync list" % len(worker_list))
         return [worker(i) for i in worker_list]

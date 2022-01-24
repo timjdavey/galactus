@@ -3,14 +3,19 @@ import time
 import numpy as np
 import pandas as pd
 import seaborn as sns
+import itertools
 import matplotlib.pyplot as plt
 from functools import cached_property, partial
+from multiprocessing import Pool
 from matplotlib.colors import LogNorm
 from .pool import pool
 from .space import Space
 
 
-def gravity_worker(iop, total, nonzero_masses, mass_components, space_scale, cp):
+G = 6.67430*(10**-11)
+
+
+def gravity_worker(iop, total, nonzero_masses, mass_components, space_scale, G, cp):
     """
     Multiprocessing function for calculating gravity
     for all the non_zero masses within mass_sum
@@ -49,13 +54,13 @@ def gravity_worker(iop, total, nonzero_masses, mass_components, space_scale, cp)
 
             for mi, mass_comps in enumerate(mass_components):
                 M = mass_comps[tuple(mass_points)]
-                F = M/r2
+                F = G*M/r2
             
                 ijk = tuple(observed_points)
                 for di, delta in enumerate(deltas):
-                    g = -F*delta/r
-                    results[mi][di] += g
-                    results[mi]['a%s' % di] += np.abs(g)
+                    F_norm_vector = -F*delta/r # vector
+                    results[mi][di] += F_norm_vector
+                    results[mi]['a%s' % di] += np.abs(F_norm_vector)
             
                 results[mi]['F'] += np.abs(F)
 
@@ -63,64 +68,11 @@ def gravity_worker(iop, total, nonzero_masses, mass_components, space_scale, cp)
 
 
 
-def grid_worker(args, observed_distance):
-    mass_distance, masses = args
-    
-    # for the same point
-    # return 0s
-    if np.array_equal(mass_distance,observed_distance):
-        return np.zeros((len(masses), len(mass_distance)*2+1))
-    else:
-        deltas = observed_distance-mass_distance
-        r2 = np.sum([d**2 for d in deltas])
-        r = r2**0.5
-    
-        results = []
-        for M in masses:
-            F = M/r2
-            res = []
-            for di, delta in enumerate(deltas):
-                g = -F*delta/r
-                res.append(g)
-                res.append(np.abs(g))
-            res.append(F)
-            results.append(res)
-        return results
-
-
-class MassIter:
-    def __init__(self, mass_list, masses, space_scale):
-        self.mass_list = mass_list
-        self.masses = masses
-        self.space_scale = space_scale
-
-    def __iter__(self):
-        self.i = 0
-        return self
-
-    def __next__(self):
-        i = self.i
-        self.i += 1
-        try:
-            mp = tuple(self.mass_list[i])
-        except IndexError:
-            raise StopIteration
-        else:
-            mass_distance = np.array(mp)*self.space_scale
-            Ms = tuple([m[mp] for m in self.masses])
-            return (mass_distance, Ms)
-
-    def reset(self):
-        self.i = 0
-
-
-
-
 class Simulation:
     """
     Main simulation object
     """
-    def __init__(self, masses, space, mass_labels=None, G=1, cp=None):
+    def __init__(self, masses, space, mass_labels=None, G=G, cp=None):
         masses = np.array(masses)
         if masses.shape == tuple(space.points):
             masses = [masses,]
@@ -135,6 +87,7 @@ class Simulation:
         self.G = G
         self.cp = cp
         self.mass_labels = mass_labels
+        self.result_list = []
 
     def analyse(self, sub_list=None, min_mass=0, alt=False, multi=True):
         """
@@ -168,80 +121,62 @@ class Simulation:
         mass_sum = self.mass_sum()
         mass_list = np.transpose(np.where(mass_sum > min_mass))
         
-        tic_t = time.perf_counter()
-        if alt:
-            result_list = []
-            total = len(point_list)
-            iterator = MassIter(mass_list, self.mass_components, space.scale)
-            
-            for i, observed_points in enumerate(point_list):
-                tic = time.perf_counter()
-                self.log("%s of %s calculation points %s%%" % (i, total, i*100/total))
-                worker = partial(grid_worker,
-                    observed_distance=np.array(observed_points)*space.scale)
-                result_list.append(np.sum(pool(worker, iterator), axis=0))
-                iterator.reset()
-                toc = time.perf_counter()
-                self.log("%s seconds" % (toc-tic))
-
-
-        else:
-            worker = partial(gravity_worker,
-                total=len(point_list),
-                nonzero_masses=mass_list,
-                mass_components=self.mass_components,
-                space_scale=space.scale,
-                cp=self.cp)
+        tic = time.perf_counter()
+        worker = partial(gravity_worker,
+            total=len(point_list),
+            nonzero_masses=mass_list,
+            mass_components=self.mass_components,
+            space_scale=space.scale,
+            G=self.G,
+            cp=self.cp)
     
-            result_list = pool(worker, enumerate(point_list), multi)
+        result_list = pool(worker, enumerate(point_list), multi)
         
-        toc_t = time.perf_counter()
-        self.log("%s total seconds" % (toc_t-tic_t))
+        toc = time.perf_counter()
+        self.log("%s total seconds" % (toc-tic))
 
-        self.result_list = result_list
+        self.result_list += result_list
+        
         self.mass_list = mass_list
         self.sub_list = sub_list
 
-        self.__fields = None
-        self.__sums = None
-        self.__dataframe = None
+        try:
+            # clear cached_property
+            # so can deal with additionally calculated points
+            del self.fields
+            del self.sums
+            del self.dataframe
+        except AttributeError:
+            pass
 
-    @property
+    @cached_property
     def fields(self):
-        if self.__fields is None:
-            space = self.space
-            fields = dict([(d, space.blank()) for d in space.dimensions])
-            for d in self.space.dimensions:
-                fields['a%s' % d] = space.blank()
-            fields['F'] = space.blank()
+        space = self.space
+        fields = dict([(d, space.blank()) for d in space.dimensions])
+        for d in self.space.dimensions:
+            fields['a%s' % d] = space.blank()
+        fields['F'] = space.blank()
         
-            # fields by mass component
-            mass_fields = {}
-            for mi in range(len(self.mass_components)):
-                mass_fields[mi] = copy.deepcopy(fields)
+        # fields by mass component
+        mass_fields = {}
+        for mi in range(len(self.mass_components)):
+            mass_fields[mi] = copy.deepcopy(fields)
         
-            self.log('combine point results')
-            for ijk, mass_results in self.result_list:
-                for mi, dimension_results in mass_results.items():
-                    for k,v in dimension_results.items():
-                        mass_fields[mi][k][tuple(ijk)] += v
-            self.__fields = mass_fields
-        
-            self.log('sum results')
-            sums = {'mass': self.mass_sum()}
-            for di in dimension_results.keys():
-                all_dimension = [mass_fields[mi][di] for mi in range(len(self.mass_components))]
-                sums[di] = np.sum(all_dimension, axis=0)
-            
-            self.__sums = sums
-        return self.__fields
+        for ijk, mass_results in self.result_list:
+            for mi, dimension_results in mass_results.items():
+                for k,v in dimension_results.items():
+                    mass_fields[mi][k][tuple(ijk)] += v
+        return mass_fields
 
-    @property
+    @cached_property
     def sums(self):
-        if self.__sums is None:
-            self.fields
-        return self.__sums
+        sums = {'mass': self.mass_sum()}
+        for di in self.fields[0].keys():
+            all_dimension = [self.fields[mi][di] for mi in self.fields.keys()]
+            sums[di] = np.sum(all_dimension, axis=0)
+        return sums
 
+    @cached_property
     def dataframe(self):
         results = []
         for ijk, result in self.result_list:

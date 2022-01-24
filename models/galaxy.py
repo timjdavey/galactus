@@ -88,6 +88,18 @@ class Galaxy(Simulation):
         self.log("completed in %s seconds" % (toc-tic))
         super().__init__(masses, space, cp=cp, mass_labels=mass_labels, *args, **kwargs)
 
+    def radius_points(self, radius=None, points=None):
+        """
+        Calculates for a set number of :points:, up to a maximum :radius:
+        Returns a list of points to analyse
+        """
+        calc_radius = radius if radius is not None else self.radius
+        percent = radius/self.radius
+        rl = self.space.radius_list
+        max_point = len(rl)*percent
+        calc_points = points if points is not None else max_point
+        return rl[:int(max_point)+1:max(int(max_point/points),1)]
+
     def dataframe(self):
         """ Returns analysis as a dataframe, adding the radius """
         df = super().dataframe()
