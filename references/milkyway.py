@@ -1,4 +1,5 @@
 from copy import deepcopy
+import numpy as np
 
 profiles = {}
 observations = {}
@@ -53,6 +54,15 @@ profiles['mcmillian2011best']['thick']['params']['Rd'] = 3.31
 profiles['mcmillian2011best']['thin']['params']['sig0'] = 816.6*(10**6)
 profiles['mcmillian2011best']['thin']['params']['Rd'] = 2.90
 
+# Assign mass calculations for disks
+def disk_mass(sig0, Rd):
+    """ Section 2.2 https://academic.oup.com/mnras/article/414/3/2446/1042117?login=true#m1 """
+    return 2*np.pi*sig0*(Rd**2)
+
+for pfile in ('mcmillian2011', 'mcmillian2011best'):
+    for dd in ('thick', 'thin'):
+        mass = disk_mass(profiles[pfile][dd]['params']['sig0'], profiles[pfile][dd]['params']['Rd'])
+        profiles[pfile][dd]['mass'] = mass
 
 
 # Referenced in Mcmillian

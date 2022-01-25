@@ -6,7 +6,7 @@ import seaborn as sns
 import itertools
 import matplotlib.pyplot as plt
 from functools import cached_property, partial
-from multiprocessing import Pool
+from multiprocessing import Pool, cpu_count
 from matplotlib.colors import LogNorm
 from .pool import pool
 from .space import Space
@@ -67,6 +67,55 @@ def gravity_worker(iop, total, nonzero_masses, mass_components, space_scale, G, 
     return (ijk, results)
 
 
+def grid_worker(args):
+    observed_distance, mass_distance, masses = args
+
+    # for the same point
+    # return 0s
+    if np.array_equal(mass_distance,observed_distance):
+        return (None, None)
+    else:
+        deltas = observed_distance-mass_distance
+        r2 = np.sum([d**2 for d in deltas])
+        r = r2**0.5
+
+        #results = []
+        for M in masses:
+            F = M/r2
+            #res = []
+            for di, delta in enumerate(deltas):
+                g = -F*delta/r
+                #res.append(g)
+                #res.append(np.abs(g))
+            #res.append(F)
+            #results.append(res)
+        return (observed_distance, {})#results)
+
+
+class MassIter:
+    def __init__(self, calc_list, mass_list, space_scale):
+        self.mass_list = mass_list
+        self.calc_list = calc_list
+        #self.masses = masses
+        self.space_scale = space_scale
+        self.length = len(mass_list)*len(calc_list)
+        #self.itp = itertools.product(self.calc_list, self.mass_list)
+        self.i = 0
+        
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        #cpoint, mpoint = self.itp.__next__()
+        self.i += 1
+        if self.i > self.length:
+            raise StopIteration
+        #cdist = np.array(cpoint)*self.space_scale
+        #mdist = np.array(mpoint)*self.space_scale
+        #mpoint = tuple(mpoint)
+        #Ms = [m[mpoint] for m in self.masses]
+        return (np.array((0,0,0)), np.array((0,1,0)), [])#Ms)
+
 
 class Simulation:
     """
@@ -89,7 +138,7 @@ class Simulation:
         self.mass_labels = mass_labels
         self.result_list = []
 
-    def analyse(self, sub_list=None, min_mass=0, alt=False, multi=True):
+    def analyse(self, sub_list=None, min_mass=0, multi=None, alt=False):
         """
         Does the main bulk of the analysis
 
@@ -118,24 +167,54 @@ class Simulation:
 
         space = self.space
         point_list = space.list if sub_list is None else sub_list
-        mass_sum = self.mass_sum()
-        mass_list = np.transpose(np.where(mass_sum > min_mass))
-        
+        mass_sum = self.mass_sum
+        mass_list = self.min_mass_list(min_mass)
+        self.results = []
+
         tic = time.perf_counter()
-        worker = partial(gravity_worker,
-            total=len(point_list),
-            nonzero_masses=mass_list,
-            mass_components=self.mass_components,
-            space_scale=space.scale,
-            G=self.G,
-            cp=self.cp)
-    
-        result_list = pool(worker, enumerate(point_list), multi)
+        if alt:
+            """
+            with Pool() as pl:
+                iterator = MassIter(point_list, mass_list, space.scale)
+                tasks = iterator.length
+                cpus = cpu_count()
+                chunksize = tasks//cpus
+                self.log("%s cpus, %s tasks, %s chunksize" % (cpus, tasks, chunksize))
+                self.log("%s point, %s masses" % (len(point_list), len(mass_list)))
+                results = {}
+                i = 0
+                for value_calc in pl.imap_unordered(grid_worker, iterator, chunksize=chunksize):
+                    #if key_dist is not None:
+                    #    results[tuple(key_dist)] = value_calc
+                    i += 1
+            """
+            worker = partial(gravity_worker,
+                total=len(point_list),
+                nonzero_masses=mass_list,
+                mass_components=self.mass_components,
+                space_scale=space.scale,
+                G=self.G,
+                cp=self.cp)
+            
+            results = []
+            with Pool() as pl:
+                for r in pl.imap_unordered(worker, enumerate(point_list)):
+                    results.append(r)
+        else:
+            worker = partial(gravity_worker,
+                total=len(point_list),
+                nonzero_masses=mass_list,
+                mass_components=self.mass_components,
+                space_scale=space.scale,
+                G=self.G,
+                cp=self.cp)
+        
+            results = pool(worker, enumerate(point_list), multi)
         
         toc = time.perf_counter()
         self.log("%s total seconds" % (toc-tic))
 
-        self.result_list += result_list
+        self.result_list += results
         
         self.mass_list = mass_list
         self.sub_list = sub_list
@@ -148,6 +227,9 @@ class Simulation:
             del self.dataframe
         except AttributeError:
             pass
+
+    def min_mass_list(self, min_mass):
+        return np.transpose(np.where(self.mass_sum > min_mass))
 
     @cached_property
     def fields(self):
@@ -170,7 +252,7 @@ class Simulation:
 
     @cached_property
     def sums(self):
-        sums = {'mass': self.mass_sum()}
+        sums = {'mass': self.mass_sum}
         for di in self.fields[0].keys():
             all_dimension = [self.fields[mi][di] for mi in self.fields.keys()]
             sums[di] = np.sum(all_dimension, axis=0)
@@ -203,6 +285,7 @@ class Simulation:
             results.append(sums)
         return pd.DataFrame(results)
 
+    @cached_property
     def mass_sum(self):
         return np.sum(self.mass_components, axis=0)
 

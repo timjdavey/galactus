@@ -1,9 +1,9 @@
 import numpy as np
 import time
-from functools import partial
+from multiprocessing import Pool, cpu_count
+from functools import cached_property, partial
 from .space import Space
 from .simulation import Simulation
-from .pool import pool
 
 
 def rz(ijk, space_scale, c):
@@ -49,7 +49,7 @@ class Galaxy(Simulation):
     https://iopscience.iop.org/article/10.3847/1538-4357/aaf648/pdf (table 1)
 
     """
-    def __init__(self, profiles, points, radius=1, zcut=5, multi=True, cp=None, combine_masses=False, *args, **kwargs):
+    def __init__(self, profiles, points, radius=1, zcut=5, multi=None, cp=None, combine_masses=False, *args, **kwargs):
         self.points = points
         self.radius = radius
         self.scale = radius*2/points
@@ -62,28 +62,27 @@ class Galaxy(Simulation):
         fl = dict([(f.__name__, f) for f in (buldge, disk)])
         funcs = [partial(fl[p['func']], **p['params']) for p in profiles.values()]
 
+        masses = []
+        for i in range(len(funcs)):
+            masses.append(space.blank())
+
         worker = partial(mass_worker,
             funcs=funcs,
             space_scale=space.scale,
             vol_per_grid=space.scale**3,
             c=space.center*space.scale,
             combine=combine_masses)
-        generators = space.list
         mass_labels = ['combined',] if combine_masses else list(profiles.keys())
+
 
         self.log('gen masses for %s points' % space.count)
         tic = time.perf_counter()
-        results = pool(worker, generators, multi, cp)
-
-        self.log('moving masses into volume matrices')
-        masses = []
-        for i in range(len(funcs)):
-            masses.append(space.blank())
-        
-        for ijk, mres in results:
-            tp = tuple(ijk)
-            for i, m in enumerate(mres):
-                masses[i][tp] = m
+        chunksize = space.count//cpu_count()
+        with Pool() as pl:
+            for ijk, mres in pl.imap_unordered(worker, space.list, chunksize=chunksize):
+                tp = tuple(ijk)
+                for i, m in enumerate(mres):
+                    masses[i][tp] = m
         toc = time.perf_counter()
         self.log("completed in %s seconds" % (toc-tic))
         super().__init__(masses, space, cp=cp, mass_labels=mass_labels, *args, **kwargs)
@@ -100,9 +99,10 @@ class Galaxy(Simulation):
         calc_points = points if points is not None else max_point
         return rl[:int(max_point)+1:max(int(max_point/points),1)]
 
+    @cached_property
     def dataframe(self):
         """ Returns analysis as a dataframe, adding the radius """
-        df = super().dataframe()
+        df = super().dataframe
         space_scale = self.space.scale
         c = self.space.center*space_scale
         
@@ -136,11 +136,4 @@ def disk(R, z, zd, sig0, Rd, Rhole=0):
     expo = -(np.abs(z)/zd)-(R/Rd)
     if R > 0 and Rhole > 0: expo -= Rhole/R
     return sig0*np.exp(expo)/(2*zd)
-
-def disk_mass(sig0, Rd):
-    """
-    Section 2.2
-    https://academic.oup.com/mnras/article/414/3/2446/1042117?login=true#m1
-    """
-    return 2*np.pi*sig0*(Rd**2)
 
