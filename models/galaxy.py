@@ -22,11 +22,12 @@ def mass_worker(ijk, funcs, space_scale, vol_per_grid, c, combine):
 
     :combine: combines all the masses into a single mass.
     """
+    ijk = np.array(ijk)
     if combine:
         density = 0
         for func in funcs:
             density += func(*rz(ijk, space_scale, c))
-        return (ijk, density*vol_per_grid)
+        return (ijk, [density*vol_per_grid,])
     else:
         masses = [func(*rz(ijk, space_scale, c))*vol_per_grid for func in funcs]
         return (ijk, masses)
@@ -65,6 +66,7 @@ class Galaxy(Simulation):
         masses = []
         for i in range(len(funcs)):
             masses.append(space.blank())
+        #masses = np.array(masses)
 
         worker = partial(mass_worker,
             funcs=funcs,
@@ -74,15 +76,21 @@ class Galaxy(Simulation):
             combine=combine_masses)
         mass_labels = ['combined',] if combine_masses else list(profiles.keys())
 
-
-        self.log('gen masses for %s points' % space.count)
+        tasks = space.count
+        self.log('gen masses for %s points' % tasks)
         tic = time.perf_counter()
-        chunksize = space.count//cpu_count()
+        chunksize = tasks//(cpu_count()*(2**11))
+        every = tasks/10
+        
         with Pool() as pl:
+            count = 0
             for ijk, mres in pl.imap_unordered(worker, space.list, chunksize=chunksize):
+                if count % every == 0: self.log("%s%%" % (count*100/tasks))
+                count += 1
                 tp = tuple(ijk)
                 for i, m in enumerate(mres):
                     masses[i][tp] = m
+
         toc = time.perf_counter()
         self.log("completed in %s seconds" % (toc-tic))
         super().__init__(masses, space, cp=cp, mass_labels=mass_labels, *args, **kwargs)

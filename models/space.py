@@ -1,4 +1,5 @@
 import numpy as np
+import itertools
 from functools import cached_property
 
 class Space:
@@ -47,6 +48,12 @@ class Space:
         return [(self.center[0],self.center[1],i) for i in self.coords[2][int(self.points[2]/2):]]
 
     @cached_property
-    def list(self):
+    def list_mesh(self):
         """ A list of all coords """
         return np.array(np.meshgrid(*self.coords)).T.reshape(-1,len(self.points))
+
+    @property
+    def list(self):
+        """ An iterable of all coords """
+        return itertools.product(*[range(p) for p in self.points])
+
