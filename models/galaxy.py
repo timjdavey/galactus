@@ -79,7 +79,7 @@ class Galaxy(Simulation):
         tasks = space.count
         self.log('gen masses for %s points' % tasks)
         tic = time.perf_counter()
-        chunksize = tasks//(cpu_count()*(2**11))
+        chunksize = max(1, tasks//(cpu_count()*(2**11)))
         every = tasks/10
         
         with Pool() as pl:

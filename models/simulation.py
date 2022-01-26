@@ -63,6 +63,20 @@ def gravity_worker(observed_points, nonzero_masses, mass_components, space_scale
     return (observed_points, results)
 
 
+def vector_gravity(position, masses, scale):
+    indices = np.indices(masses.shape[1:])
+    deltas = np.array([(indices[i]-c)*scale for i, c in enumerate(position)])
+    r2 = np.sum(deltas**2, axis=0)
+    r2[tuple(position)] = 1e6 # handle the divide by zero error for position
+    r3 = r2**1.5
+    results = []
+    for mass in masses:
+        F_norm = -mass*deltas/r3
+        F_vec = [np.sum(arr) for arr in F_norm]
+        F_abs = [np.sum(arr) for arr in np.abs(F_norm)]
+        results.append([F_vec, F_abs])
+    return results
+
 class Simulation:
     """
     Main simulation object
@@ -77,7 +91,7 @@ class Simulation:
         self.mass_labels = mass_labels
         self.result_list = []
 
-    def analyse(self, sub_list=None, min_mass=0, multi=None):
+    def analyse(self, sub_list=None, min_mass=0, multi=None, alt=False):
         """
         Does the main bulk of the analysis
 
@@ -113,18 +127,29 @@ class Simulation:
         tic = time.perf_counter()
         tasks = len(point_list)
         self.log("Setting up worker")
-        worker = partial(gravity_worker,
-            nonzero_masses=mass_list,
-            mass_components=self.mass_components,
-            space_scale=space.scale,
-            G=self.G)
-        
-        with Pool() as pl:
-            results = []
-            self.log("Starting up %s tasks" % tasks)
-            for count, r in enumerate(pl.imap_unordered(worker, point_list, chunksize=1)):
-                self.log("%s of %s, %s%%" % (count, tasks, count*100/tasks))
-                results.append(r)
+        if alt:
+            worker = partial(vector_gravity,
+                masses=self.mass_components,
+                scale=space.scale)
+
+            with Pool() as pl:
+                results = []
+                for count, r in enumerate(pl.imap_unordered(worker, point_list, chunksize=1)):
+                    self.log("%s of %s, %s%%" % (count, tasks, count*100/tasks))
+                    results.append(r)
+        else:
+            worker = partial(gravity_worker,
+                nonzero_masses=mass_list,
+                mass_components=self.mass_components,
+                space_scale=space.scale,
+                G=self.G)
+            
+            with Pool() as pl:
+                results = []
+                self.log("Starting up %s tasks" % tasks)
+                for count, r in enumerate(pl.imap_unordered(worker, point_list, chunksize=1)):
+                    self.log("%s of %s, %s%%" % (count, tasks, count*100/tasks))
+                    results.append(r)
         
         toc = time.perf_counter()
         self.log("%s total seconds" % (toc-tic))
