@@ -6,33 +6,6 @@ from .space import Space
 from .simulation import Simulation
 
 
-def rz(ijk, space_scale, c):
-    """
-    Calculates r & z.
-    """
-    d = ijk*space_scale
-    z = np.abs(c[0] - d[0])
-    r = ((c[1]-d[1])**2 + (c[2]-d[2])**2)**0.5
-    return r,z
-    
-
-def mass_worker(ijk, funcs, space_scale, vol_per_grid, c, combine):
-    """
-    Calculates the mass for a given point in space.
-
-    :combine: combines all the masses into a single mass.
-    """
-    ijk = np.array(ijk)
-    if combine:
-        density = 0
-        for func in funcs:
-            density += func(*rz(ijk, space_scale, c))
-        return (ijk, [density*vol_per_grid,])
-    else:
-        masses = [func(*rz(ijk, space_scale, c))*vol_per_grid for func in funcs]
-        return (ijk, masses)
-
-
 class Galaxy(Simulation):
     """
     Wrapper around Simulation.
@@ -50,7 +23,7 @@ class Galaxy(Simulation):
     https://iopscience.iop.org/article/10.3847/1538-4357/aaf648/pdf (table 1)
 
     """
-    def __init__(self, profiles, points, radius=1, zcut=5, multi=None, cp=None, combine_masses=False, *args, **kwargs):
+    def __init__(self, profiles, points, radius=1, zcut=5, cp=None, *args, **kwargs):
         self.points = points
         self.radius = radius
         self.scale = radius*2/points
@@ -61,35 +34,16 @@ class Galaxy(Simulation):
         space = Space((int(self.points/zcut), self.points, self.points), self.scale)
 
         fl = dict([(f.__name__, f) for f in (buldge, disk)])
-        funcs = [partial(fl[p['func']], **p['params']) for p in profiles.values()]
 
-        masses = []
-        for i in range(len(funcs)):
-            masses.append(space.blank())
-        #masses = np.array(masses)
-
-        worker = partial(mass_worker,
-            funcs=funcs,
-            space_scale=space.scale,
-            vol_per_grid=space.scale**3,
-            c=space.center*space.scale,
-            combine=combine_masses)
-        mass_labels = ['combined',] if combine_masses else list(profiles.keys())
-
-        tasks = space.count
-        self.log('gen masses for %s points' % tasks)
         tic = time.perf_counter()
-        chunksize = max(1, tasks//(cpu_count()*(2**11)))
-        every = tasks/10
-        
-        with Pool() as pl:
-            count = 0
-            for ijk, mres in pl.imap_unordered(worker, space.list, chunksize=chunksize):
-                if count % every == 0: self.log("%s%%" % (count*100/tasks))
-                count += 1
-                tp = tuple(ijk)
-                for i, m in enumerate(mres):
-                    masses[i][tp] = m
+        masses = []
+        mass_labels = []
+        self.log('gen rz')
+        r, z = space.rz
+        for label, p in profiles.items():
+            self.log('gen %s' % label)
+            masses.append(fl[p['func']](r,z, **p['params']))
+            mass_labels.append(label)
 
         toc = time.perf_counter()
         self.log("completed in %s seconds" % (toc-tic))
@@ -105,22 +59,15 @@ class Galaxy(Simulation):
         rl = self.space.radius_list
         max_point = len(rl)*percent
         calc_points = points if points is not None else max_point
-        return rl[:int(max_point)+1:max(int(max_point/points),1)]
+        return rl[:int(max_point)+1:max(int(max_point/points),1)][:points]
 
     @cached_property
     def dataframe(self):
         """ Returns analysis as a dataframe, adding the radius """
         df = super().dataframe
-        space_scale = self.space.scale
-        c = self.space.center*space_scale
-        
-        rs, zs = [], []
-        for i, ijk in df['ijk'].items():
-            r,z = rz(np.array(ijk), space_scale, c)
-            rs.append(r)
-            zs.append(z)
-        df['rs'] = rs
-        df['zs'] = zs
+        c = self.space.center
+        df['zd'] = df['z']-c[0]
+        df['rd'] = ((df['y']-c[1])**2 + (df['x']-c[2])**2)**0.5
         return df
 
 def buldge(R, z, p0, q, rcut, r0, alpha):
@@ -142,6 +89,6 @@ def disk(R, z, zd, sig0, Rd, Rhole=0):
     https://arxiv.org/pdf/1604.01216.pdf (eq 12)
     """
     expo = -(np.abs(z)/zd)-(R/Rd)
-    if R > 0 and Rhole > 0: expo -= Rhole/R
+    if Rhole > 0: expo -= Rhole/R
     return sig0*np.exp(expo)/(2*zd)
 

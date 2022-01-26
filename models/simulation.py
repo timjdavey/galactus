@@ -14,56 +14,7 @@ from .space import Space
 G = 6.67430*(10**-11)
 
 
-def gravity_worker(observed_points, nonzero_masses, mass_components, space_scale, G):
-    """
-    Multiprocessing function for calculating gravity
-    for all the non_zero masses within mass_sum
-    and for a specific `observed_points` in space
-    """
-    observed_distance = np.array(observed_points)*space_scale
-
-    # save results by mass component
-    results = {}
-    for mi in range(len(mass_components)):
-        rr = {'F': 0}
-        for di in range(len(observed_points)):
-            rr[di] = 0
-            rr['a%s' % di] = 0
-        results[mi] = rr
-
-    # calculate for all nonzero_mass points
-    for mass_points in nonzero_masses:
-        
-        if np.array_equal(mass_points,observed_points):
-        # the mass of a certain grid point
-        # has no impact on it's own grid point
-        # to avoid infinities etc
-        # so leave as 0
-            pass
-        else:
-            mass_distance = np.array(mass_points)*space_scale
-
-            deltas = observed_distance-mass_distance
-        
-            r2 = np.sum([d**2 for d in deltas])
-            r = r2**0.5
-
-            for mi, mass_comps in enumerate(mass_components):
-                M = mass_comps[tuple(mass_points)]
-                F = G*M/r2
-            
-                ijk = tuple(observed_points)
-                for di, delta in enumerate(deltas):
-                    F_norm_vector = -F*delta/r # vector
-                    results[mi][di] += F_norm_vector
-                    results[mi]['a%s' % di] += np.abs(F_norm_vector)
-            
-                results[mi]['F'] += np.abs(F)
-
-    return (observed_points, results)
-
-
-def vector_gravity(position, masses, scale):
+def gravity_worker(position, masses, scale):
     indices = np.indices(masses.shape[1:])
     deltas = np.array([(indices[i]-c)*scale for i, c in enumerate(position)])
     r2 = np.sum(deltas**2, axis=0)
@@ -75,7 +26,8 @@ def vector_gravity(position, masses, scale):
         F_vec = [np.sum(arr) for arr in F_norm]
         F_abs = [np.sum(arr) for arr in np.abs(F_norm)]
         results.append([F_vec, F_abs])
-    return results
+    return position, results
+
 
 class Simulation:
     """
@@ -85,13 +37,13 @@ class Simulation:
         masses = np.array(masses)
         masses.flags.writeable = False # makes masses a constant
         self.mass_components = masses
+        self.mass_labels = mass_labels
         self.space = space
         self.G = G
         self.cp = cp
-        self.mass_labels = mass_labels
-        self.result_list = []
+        self.results = {}
 
-    def analyse(self, sub_list=None, min_mass=0, multi=None, alt=False):
+    def analyse(self, sub_list=None, processes=None):
         """
         Does the main bulk of the analysis
 
@@ -99,8 +51,7 @@ class Simulation:
         :min_mass: 0, only calculate for points with mass greater than this value
 
         first assumption is all masses
-        in each grid point
-        are summed to a single mass for that grid
+        in each grid point are summed to a single mass for that grid
         so densities are treated normally
 
         then calculates the affect of the mass in
@@ -114,212 +65,71 @@ class Simulation:
         work out the vector & scalar force
         observed for each other point in space
 
-
         only need to do for points with nonzero mass
         """
-
-        space = self.space
-        point_list = space.list if sub_list is None else sub_list
-        mass_sum = self.mass_sum
-        mass_list = space.list #self.min_mass_list(min_mass)
-        self.results = []
-
         tic = time.perf_counter()
+        point_list = self.space.list if sub_list is None else sub_list
         tasks = len(point_list)
-        self.log("Setting up worker")
-        if alt:
-            worker = partial(vector_gravity,
-                masses=self.mass_components,
-                scale=space.scale)
-
-            with Pool() as pl:
-                results = []
-                for count, r in enumerate(pl.imap_unordered(worker, point_list, chunksize=1)):
-                    self.log("%s of %s, %s%%" % (count, tasks, count*100/tasks))
-                    results.append(r)
-        else:
-            worker = partial(gravity_worker,
-                nonzero_masses=mass_list,
-                mass_components=self.mass_components,
-                space_scale=space.scale,
-                G=self.G)
-            
-            with Pool() as pl:
-                results = []
-                self.log("Starting up %s tasks" % tasks)
-                for count, r in enumerate(pl.imap_unordered(worker, point_list, chunksize=1)):
-                    self.log("%s of %s, %s%%" % (count, tasks, count*100/tasks))
-                    results.append(r)
+        worker = partial(gravity_worker,
+            masses=self.mass_components,
+            scale=self.space.scale)
+        if processes is None: processes = cpu_count()
+        self.log("Setting up %s gravity tasks with %s processes" % (tasks, processes))
+        with Pool(processes) as pl:
+            for count, r in enumerate(pl.imap_unordered(worker, point_list, chunksize=1)):
+                toc = time.perf_counter()
+                self.log("%s of %s, %s seconds left" % (count+1, tasks, (toc-tic)*(tasks-count)/(count+1)))
+                self.results[r[0]] = r[1]
         
         toc = time.perf_counter()
-        self.log("%s total seconds" % (toc-tic))
-
-        self.result_list += results
+        self.log("completed in %s seconds" % (toc-tic))
+        self.__clear_cache()
         
-        self.mass_list = mass_list
-        self.sub_list = sub_list
-
+    def __clear_cache(self):
+        # clear cached_property of dataframe
         try:
-            # clear cached_property
-            # so can deal with additionally calculated points
-            del self.fields
-            del self.sums
             del self.dataframe
         except AttributeError:
             pass
 
-    def min_mass_list(self, min_mass):
-        return np.transpose(np.where(self.mass_sum > min_mass))
-
-    @cached_property
-    def fields(self):
-        space = self.space
-        fields = dict([(d, space.blank()) for d in space.dimensions])
-        for d in self.space.dimensions:
-            fields['a%s' % d] = space.blank()
-        fields['F'] = space.blank()
-        
-        # fields by mass component
-        mass_fields = {}
-        for mi in range(len(self.mass_components)):
-            mass_fields[mi] = copy.deepcopy(fields)
-        
-        for ijk, mass_results in self.result_list:
-            for mi, dimension_results in mass_results.items():
-                for k,v in dimension_results.items():
-                    mass_fields[mi][k][tuple(ijk)] += v
-        return mass_fields
-
-    @cached_property
-    def sums(self):
-        sums = {'mass': self.mass_sum}
-        for di in self.fields[0].keys():
-            all_dimension = [self.fields[mi][di] for mi in self.fields.keys()]
-            sums[di] = np.sum(all_dimension, axis=0)
-        return sums
-
     @cached_property
     def dataframe(self):
-        results = []
-        for ijk, result in self.result_list:
-            sums = {
-                'z': ijk[0],
-                'y': ijk[1],
-                'x': ijk[2],
-                'ijk': ijk,
-                'component': 'sum',
-            }
-            for mass_index, mass_res in result.items():
+        data = []
+        dimensions = ('z','y','x')
+        for ijk, result in self.results.items():
+            sums = {'component': 'sum'}
+            for di, d in enumerate(dimensions):
+                sums[d] = ijk[di]
+            for mi, mass_res in enumerate(result):
                 rr = sums.copy()
-                if self.mass_labels is not None:
-                    rr['component'] = self.mass_labels[mass_index] 
-                else:
-                    rr['component'] = mass_index
-                for k,v in mass_res.items():
-                    rr[k] = v
-                    if mass_index == 0:
-                        sums[k] = v
-                    else:
-                        sums[k] += v
-                results.append(rr)
-            results.append(sums)
-        return pd.DataFrame(results)
+                rr['component'] = self.mass_labels[mi] if self.mass_labels is not None else mi
+                
+                for ci, clabel in enumerate(('vec', 'abs')):
+                    for di, v in enumerate(mass_res[ci]):
+                        key = "%s_%s" % (dimensions[di], clabel)
+                        rr[key] = v
+                    
+                        if mi == 0: sums[key] = v
+                        else: sums[key] += v
+                
+                data.append(rr)
+            data.append(sums)
+        return pd.DataFrame(data)
 
     @cached_property
     def mass_sum(self):
         return np.sum(self.mass_components, axis=0)
 
+    def combine_masses(self):
+        """ Combines the mass components into a single mass, to speed up analysis of large spaces """
+        self.mass_components = np.array([self.mass_sum,])
+        self.mass_labels = ['combined',]
+        self.results = {}
+        self.__clear_cache()
+
     def log(self, *args, **kwargs):
         """ Outputs to notebook """
         if self.cp is not None: self.cp(*args, **kwargs)
-
-    def rotate(self, d1, d2):
-        """
-        Rotates the sums & space objects, not the components
-        :d1: (0,1,2) or ('z','y','x')
-        :d2: second dimension to swap
-        """
-
-        # convert to dimension int to reference
-        dims = dict([(key,i) for i, key in enumerate(['z','y','x'])])
-        if d1 in dims.keys() and d2 in dims.keys():
-            d1, d2 = dims[d1],dims[d2]
-        elif d1 not in dims.values() or d2 not in dims.values():
-            raise ValueError('Invalid dimensions')
-
-        # sums
-        self.log('sums')
-        dic = self.sums
-        self._sums = copy.deepcopy(dic)
-        for key, value in dic.items():
-            dic[key] = np.rot90(dic[key], axes=(d1,d2))
-        self.__sums = dic
-
-
-        # space
-        self.log('space')
-        self._space = self.space
-        old_points = self.space.points
-        new_points = list(old_points)
-        new_points[d2] = old_points[d1]
-        new_points[d1] = old_points[d2]
-        self.space = Space(new_points, self.space.scale)
-
-
-        # mass
-        self.log('mass components')
-        self._fields = copy.deepcopy(self.fields)
-        for mi, dic in self.fields.items():
-            for key, value in dic.items():
-                dic[key] = np.rot90(dic[key], axes=(d1,d2))
-            self.fields[mi] = dic
-        self.log()
-
-    def reset_rotation(self):
-        """ Resets the simulation back to it's original orientation """
-        try:
-            self.space = self._space
-            self.sums = self._sums
-        except AttributeError:
-            pass # if no rotation has happened
-    
-    def _heatmap(self, grids, col, axes, cmap, title=None):
-        self.log(title)
-        vmin, vmax = grids.min(), grids.max()
-        lm = len(grids)
-        cmap = 'icefire' if vmin < 0 else 'cubehelix'
-
-        for i, grid in enumerate(grids):
-            f = sns.heatmap(grid, ax=axes[i][col], vmin=vmin, vmax=vmax,
-                cbar= (i == 0), cmap=cmap)
-            if i == 0:
-                f.set(title=title)
-        self.log()
-
-    def heatmaps(self, slices=None, image_scale=15, show=(0,1,2,'mass')):
-        """
-        Plots all the heatmaps of all the sums data (masses & fields),
-        for all z axis stacks.
-
-        :slices: allows you to show a reduced number (from, to, how many)
-        """
-        if slices is None:
-            how_many = self.space.points[0]
-        else:
-            how_many = len(self.sums['mass'][slices[0]:slices[1]:slices[2]])
-        
-        squares = len(self.sums)
-        fig, axes = plt.subplots(how_many, squares,
-            figsize=(image_scale,how_many*image_scale/squares))
-
-        for i, k in enumerate(self.sums.keys()):
-            if k in show or show is None:
-                if slices is None:
-                    grids = self.sums[k] 
-                else:
-                    grids = self.sums[k][slices[0]:slices[1]:slices[2]]
-    
-                self._heatmap(grids, i, axes, title=k)
 
     def lines(self, stack=None, row=None):
         """ Plots lines of an x axis row for all sums """
@@ -335,18 +145,17 @@ class Simulation:
         """ Heatmap of mass over space """
         if stack is None: stack = self.space.center[0]
         fig, axes = plt.subplots(figsize=(15,10))
-        sns.heatmap(self.sums['mass'][stack],
+        sns.heatmap(self.mass_sum[stack],
             cmap=cmap,
             square=True, norm=LogNorm(),
             xticklabels=self.space.x, yticklabels=self.space.coords[1]*self.space.scale)
 
     def save(self, filename):
         import pickle
-        print("Saving %s" % filename)
+        self.log("Saving %s" % filename)
         with open('%s.pickle' % filename, 'wb') as fh:
             pickle.dump(self, fh)
-
-        print("Complete")
+        self.log("Complete")
 
 
 
