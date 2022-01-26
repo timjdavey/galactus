@@ -4,7 +4,7 @@ from multiprocessing import Pool, cpu_count
 from functools import cached_property, partial
 from .space import Space
 from .simulation import Simulation
-
+from .memory import memory_usage
 
 class Galaxy(Simulation):
     """
@@ -30,7 +30,7 @@ class Galaxy(Simulation):
         self.cp = cp
         self.profiles = profiles
 
-        self.log('gen space')
+        self.log('gen space, using %s' % memory_usage())
         space = Space((int(self.points/zcut), self.points, self.points), self.scale)
 
         fl = dict([(f.__name__, f) for f in (buldge, disk)])
@@ -38,15 +38,18 @@ class Galaxy(Simulation):
         tic = time.perf_counter()
         masses = []
         mass_labels = []
-        self.log('gen rz')
-        r, z = space.rz
+        self.log('gen rz, using %s' % memory_usage())
+        r, z = space.rz()
         for label, p in profiles.items():
-            self.log('gen %s' % label)
-            masses.append(fl[p['func']](r,z, **p['params']))
+            self.log('gen %s, using %s' % (label, memory_usage()))
+            # density * volume_per_grid
+            masses.append(fl[p['func']](r,z, **p['params'])*(space.scale**3))
             mass_labels.append(label)
 
         toc = time.perf_counter()
-        self.log("completed in %s seconds" % (toc-tic))
+        self.log("completed in %.2fs, using %s" % ((toc-tic), memory_usage()))
+        masses = np.array(masses)
+        masses.flags.writeable = False
         super().__init__(masses, space, cp=cp, mass_labels=mass_labels, *args, **kwargs)
 
     def radius_points(self, radius=None, points=None):

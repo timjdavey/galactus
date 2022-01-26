@@ -26,7 +26,7 @@ profiles['mcmillian2011'] = {
             'alpha':1.8,
         },
         'func': 'buldge',
-        'mass': [8.9*(10**9), 0.89*(10**9)], # Table 1
+        'mass': [8.9*(10**9), (8.9*(10**9))*1.1, (8.9*(10**9))*0.9], # Table 1
     },
     'thick': {
         'params': {
@@ -57,7 +57,8 @@ profiles['mcmillian2011best']['thin']['params']['Rd'] = 2.90
 # Assign mass calculations for disks
 def disk_mass(sig0, Rd):
     """ Section 2.2 https://academic.oup.com/mnras/article/414/3/2446/1042117?login=true#m1 """
-    return 2*np.pi*sig0*(Rd**2)
+    mass = 2*np.pi*sig0*(Rd**2)
+    return [mass, mass*1.1, mass*0.9]
 
 for pfile in ('mcmillian2011', 'mcmillian2011best'):
     for dd in ('thick', 'thin'):

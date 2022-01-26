@@ -1,5 +1,6 @@
 import copy
 import time
+import gc
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -9,24 +10,25 @@ from functools import cached_property, partial
 from multiprocessing import Pool, cpu_count
 from matplotlib.colors import LogNorm
 from .space import Space
-
+from .memory import memory_usage
 
 G = 6.67430*(10**-11)
-
 
 def gravity_worker(position, masses, scale):
     indices = np.indices(masses.shape[1:])
     deltas = np.array([(indices[i]-c)*scale for i, c in enumerate(position)])
+
     r2 = np.sum(deltas**2, axis=0)
     r2[tuple(position)] = 1e6 # handle the divide by zero error for position
     r3 = r2**1.5
+
     results = []
     for mass in masses:
         F_norm = -mass*deltas/r3
         F_vec = [np.sum(arr) for arr in F_norm]
         F_abs = [np.sum(arr) for arr in np.abs(F_norm)]
         results.append([F_vec, F_abs])
-    return position, results
+    return results
 
 
 class Simulation:
@@ -34,16 +36,17 @@ class Simulation:
     Main simulation object
     """
     def __init__(self, masses, space, mass_labels=None, G=G, cp=None):
-        masses = np.array(masses)
+        if isinstance(masses, list): masses = np.array(masses)
         masses.flags.writeable = False # makes masses a constant
         self.mass_components = masses
+        self.mass_sums = [np.sum(m) for m in self.mass_components]
         self.mass_labels = mass_labels
         self.space = space
         self.G = G
         self.cp = cp
         self.results = {}
 
-    def analyse(self, sub_list=None, processes=None):
+    def analyse(self, sub_list=None):
         """
         Does the main bulk of the analysis
 
@@ -70,59 +73,64 @@ class Simulation:
         tic = time.perf_counter()
         point_list = self.space.list if sub_list is None else sub_list
         tasks = len(point_list)
-        worker = partial(gravity_worker,
-            masses=self.mass_components,
-            scale=self.space.scale)
-        if processes is None: processes = cpu_count()
-        self.log("Setting up %s gravity tasks with %s processes" % (tasks, processes))
-        with Pool(processes) as pl:
-            for count, r in enumerate(pl.imap_unordered(worker, point_list, chunksize=1)):
+        
+        self.log("Setting up %s gravity tasks, using %s" % (tasks, memory_usage()))
+        for count, p in enumerate(point_list):
+            if p not in self.results:
+                r = gravity_worker(p, self.mass_components, self.space.scale)
                 toc = time.perf_counter()
-                self.log("%s of %s, %s seconds left" % (count+1, tasks, (toc-tic)*(tasks-count)/(count+1)))
-                self.results[r[0]] = r[1]
+                diff = (toc-tic)
+                self.log("%s of %s, %.2fs in, %.2fs left, using %s" % (count+1, tasks, diff, diff*(tasks-count)/(count+1), memory_usage()))
+                self.results[p] = r
+            else:
+                self.log("%s of %s ignored as already completed" % (count, tasks))
         
         toc = time.perf_counter()
-        self.log("completed in %s seconds" % (toc-tic))
+        self.log("completed in %.2f seconds" % (toc-tic))
         self.__clear_cache()
         
     def __clear_cache(self):
         # clear cached_property of dataframe
         try:
             del self.dataframe
+            del self.dataframe_sum
         except AttributeError:
             pass
 
-    @cached_property
-    def dataframe(self):
+    def dataframe_raw(self):
         data = []
         dimensions = ('z','y','x')
         for ijk, result in self.results.items():
-            sums = {'component': 'sum'}
-            for di, d in enumerate(dimensions):
-                sums[d] = ijk[di]
+            rr = {}
             for mi, mass_res in enumerate(result):
-                rr = sums.copy()
+                rr = dict([(d, ijk[di]) for di, d in enumerate(dimensions)])
                 rr['component'] = self.mass_labels[mi] if self.mass_labels is not None else mi
                 
                 for ci, clabel in enumerate(('vec', 'abs')):
                     for di, v in enumerate(mass_res[ci]):
                         key = "%s_%s" % (dimensions[di], clabel)
                         rr[key] = v
-                    
-                        if mi == 0: sums[key] = v
-                        else: sums[key] += v
-                
                 data.append(rr)
-            data.append(sums)
-        return pd.DataFrame(data)
+        return data
 
     @cached_property
-    def mass_sum(self):
-        return np.sum(self.mass_components, axis=0)
+    def dataframe(self):
+        return pd.DataFrame(self.dataframe_raw())
+
+    @cached_property
+    def dataframe_sum(self):
+        return self.dataframe.groupby(['z','y','x','zd','rd']).sum().reset_index()
+
+    def mass_analysis(self):
+        for i, mass in enumerate(self.mass_sums):
+            label = self.mass_labels[i]
+            ref = self.profiles[label]['mass']
+            offby = (mass/ref[0])-1*100
+            self.log("%s is %.2f%% off, with reference" % (label, offby, ref))
 
     def combine_masses(self):
         """ Combines the mass components into a single mass, to speed up analysis of large spaces """
-        self.mass_components = np.array([self.mass_sum,])
+        self.mass_components = np.array([np.sum(self.mass_components, axis=0),])
         self.mass_labels = ['combined',]
         self.results = {}
         self.__clear_cache()
@@ -150,11 +158,20 @@ class Simulation:
             square=True, norm=LogNorm(),
             xticklabels=self.space.x, yticklabels=self.space.coords[1]*self.space.scale)
 
-    def save(self, filename):
+    def save(self, filename, masses=True):
         import pickle
-        self.log("Saving %s" % filename)
+        if masses:
+            self.log("Saving %s masses" % filename)
+            with open("%s.npy" % filename, 'wb') as f:
+                np.save(f, self.mass_components)
+        else:
+            self.log("Throwing masses away!")
+        self.mass_components = None
+
+        self.log("Saving %s pickle" % filename)
         with open('%s.pickle' % filename, 'wb') as fh:
             pickle.dump(self, fh)
+        
         self.log("Complete")
 
 

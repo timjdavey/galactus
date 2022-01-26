@@ -1,5 +1,6 @@
 # Custom excludes
 *.pickle
+*.npy
 mprofile*
 
 # Byte-compiled / optimized / DLL files
