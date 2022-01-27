@@ -1,6 +1,7 @@
 import nbsetup
 import pickle
 import numpy as np
+import pandas as pd
 
 DIR = '../generations/'
 
@@ -22,17 +23,26 @@ def load(filename, directory=DIR, masses=True):
     return sim
 
 
-def load_components(filename, components, directory=DIR):
-    results = []
+def load_components(filename, profiles, directory=DIR):
+    """
+    Loads a pickled simulation as one, but where each component has been
+    calculated seperately to keep memory usage down.
+    >> mc = load_components('mcmillian2011best_200_100', mref.profiles['mcmillian2011best'])
+    """
+    dataframes = []
     masses = []
+    components = list(profiles.keys())
     for component in components:
         fname = "%s_%s" % (filename, component)
-        sim = load(filename, masses=False)
-        results += sim.dataframe_raw()
+        sim = load(fname, masses=False)
+        df = sim.dataframe
+        df['component'] = component
+        dataframes.append(df)
         masses += sim.mass_sums
 
-    sim.results = results
+    sim.dataframe = pd.concat(dataframes)
     sim.mass_sums = masses
     sim.mass_labels = components
+    sim.profiles = profiles
     
     return sim

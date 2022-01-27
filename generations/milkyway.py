@@ -5,14 +5,15 @@ from models.galaxy import Galaxy
 from references.milkyway import profiles
 
 if __name__ == '__main__':
-    pname = 'mcmillian2011best'
+    pname = 'huang2016'
 
-    mass_points = 600
-    mass_radius = 100
+    mass_points = 800
+    mass_radius = 50
 
     point_sections = [
-        (10, 5), # points, upto radius
-        (10, 25),
+        # points, upto radius
+        (15, 5), 
+        (20, 25),
         (10, mass_radius),
     ]
     

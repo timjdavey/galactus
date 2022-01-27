@@ -69,8 +69,9 @@ class Galaxy(Simulation):
         """ Returns analysis as a dataframe, adding the radius """
         df = super().dataframe
         c = self.space.center
-        df['zd'] = df['z']-c[0]
-        df['rd'] = ((df['y']-c[1])**2 + (df['x']-c[2])**2)**0.5
+        scale = self.space.scale
+        df['zd'] = (df['z']-c[0])*scale
+        df['rd'] = scale*((df['y']-c[1])**2 + (df['x']-c[2])**2)**0.5
         return df
 
 def buldge(R, z, p0, q, rcut, r0, alpha):

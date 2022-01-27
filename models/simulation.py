@@ -12,19 +12,20 @@ from matplotlib.colors import LogNorm
 from .space import Space
 from .memory import memory_usage
 
-G = 6.67430*(10**-11)
+Gkg = 6.67430*(10**-11) # m3 kg-1 s-2
+Gsolar = 4.30091*(10**-6) # kpc Ms-1 (km/s)2
 
-def gravity_worker(position, masses, scale):
+def gravity_worker(position, masses, scale, G):
     indices = np.indices(masses.shape[1:])
     deltas = np.array([(indices[i]-c)*scale for i, c in enumerate(position)])
 
     r2 = np.sum(deltas**2, axis=0)
     r2[tuple(position)] = 1e6 # handle the divide by zero error for position
-    r3 = r2**1.5
+    gr3 = G/(r2**1.5)
 
     results = []
     for mass in masses:
-        F_norm = -mass*deltas/r3
+        F_norm = -mass*deltas*gr3
         F_vec = [np.sum(arr) for arr in F_norm]
         F_abs = [np.sum(arr) for arr in np.abs(F_norm)]
         results.append([F_vec, F_abs])
@@ -35,7 +36,7 @@ class Simulation:
     """
     Main simulation object
     """
-    def __init__(self, masses, space, mass_labels=None, G=G, cp=None):
+    def __init__(self, masses, space, mass_labels=None, G=Gsolar, cp=None):
         if isinstance(masses, list): masses = np.array(masses)
         masses.flags.writeable = False # makes masses a constant
         self.mass_components = masses
@@ -77,7 +78,7 @@ class Simulation:
         self.log("Setting up %s gravity tasks, using %s" % (tasks, memory_usage()))
         for count, p in enumerate(point_list):
             if p not in self.results:
-                r = gravity_worker(p, self.mass_components, self.space.scale)
+                r = gravity_worker(p, self.mass_components, self.space.scale, self.G)
                 toc = time.perf_counter()
                 diff = (toc-tic)
                 self.log("%s of %s, %.2fs in, %.2fs left, using %s" % (count+1, tasks, diff, diff*(tasks-count)/(count+1), memory_usage()))
@@ -92,7 +93,7 @@ class Simulation:
     def __clear_cache(self):
         # clear cached_property of dataframe
         try:
-            del self.dataframe
+            del self.dataframe_raw
             del self.dataframe_sum
         except AttributeError:
             pass
@@ -121,12 +122,17 @@ class Simulation:
     def dataframe_sum(self):
         return self.dataframe.groupby(['z','y','x','zd','rd']).sum().reset_index()
 
-    def mass_analysis(self):
+    def mass_ratios(self, speak=False):
+        ratios = {}
+        msg = []
         for i, mass in enumerate(self.mass_sums):
             label = self.mass_labels[i]
             ref = self.profiles[label]['mass']
-            offby = (mass/ref[0])-1*100
-            self.log("%s is %.2f%% off, with reference" % (label, offby, ref))
+            ratio = mass/ref[0]
+            ratios[label] = ratio
+            msg.append("%s is %.2f%% off, at %s against reference %s" % (label, (ratio-1)*100, mass, ref))
+        if speak: self.log("\n".join(msg))
+        return ratios        
 
     def combine_masses(self):
         """ Combines the mass components into a single mass, to speed up analysis of large spaces """
