@@ -39,7 +39,9 @@ class Galaxy(Simulation):
         masses = []
         mass_labels = []
         self.log('gen rz, using %s' % memory_usage())
+        
         r, z = space.rz()
+
         for label, p in profiles.items():
             self.log('gen %s, using %s' % (label, memory_usage()))
             # density * volume_per_grid
@@ -93,6 +95,10 @@ def disk(R, z, zd, sig0, Rd, Rhole=0):
     https://arxiv.org/pdf/1604.01216.pdf (eq 12)
     """
     expo = -(np.abs(z)/zd)-(R/Rd)
-    if Rhole > 0: expo -= Rhole/R
+    if Rhole > 0:
+        # to account for divide by zero
+        rcenter = R.shape[1]//2
+        R[:,rcenter,rcenter] = 1e-6
+        expo -= Rhole/R
     return sig0*np.exp(expo)/(2*zd)
 

@@ -20,7 +20,8 @@ def gravity_worker(position, masses, scale, G):
     deltas = np.array([(indices[i]-c)*scale for i, c in enumerate(position)])
 
     r2 = np.sum(deltas**2, axis=0)
-    r2[tuple(position)] = 1e6 # handle the divide by zero error for position
+    # handle the divide by zero error for position
+    r2[tuple(position)] = 1e-6
     gr3 = G/(r2**1.5)
 
     results = []
@@ -118,7 +119,6 @@ class Simulation:
     def dataframe(self):
         return pd.DataFrame(self.dataframe_raw())
 
-    @cached_property
     def dataframe_sum(self):
         return self.dataframe.groupby(['z','y','x','zd','rd']).sum().reset_index()
 
