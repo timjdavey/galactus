@@ -66,10 +66,9 @@ class Galaxy(Simulation):
         calc_points = points if points is not None else max_point
         return rl[:int(max_point)+1:max(int(max_point/points),1)][:points]
 
-    @cached_property
-    def dataframe(self):
+    def dataframe(self, *args, **kwargs):
         """ Returns analysis as a dataframe, adding the radius """
-        df = super().dataframe
+        df = super().dataframe(*args, **kwargs)
         c = self.space.center
         scale = self.space.scale
         df['zd'] = (df['z']-c[0])*scale

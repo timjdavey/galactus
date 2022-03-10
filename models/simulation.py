@@ -15,18 +15,17 @@ from .memory import memory_usage
 Gkg = 6.67430*(10**-11) # m3 kg-1 s-2
 Gsolar = 4.30091*(10**-6) # kpc Ms-1 (km/s)2
 
-def gravity_worker(position, masses, scale, G):
+def gravity_worker(position, masses, scale):
     indices = np.indices(masses.shape[1:])
     deltas = np.array([(indices[i]-c)*scale for i, c in enumerate(position)])
 
     r2 = np.sum(deltas**2, axis=0)
-    # handle the divide by zero error for position
-    r2[tuple(position)] = 1e-6
-    gr3 = G/(r2**1.5)
+    r2[tuple(position)] = 1e6 # handle the divide by zero error for position
+    r3 = r2**1.5
 
     results = []
     for mass in masses:
-        F_norm = -mass*deltas*gr3
+        F_norm = -mass*deltas/r3
         F_vec = [np.sum(arr) for arr in F_norm]
         F_abs = [np.sum(arr) for arr in np.abs(F_norm)]
         results.append([F_vec, F_abs])
@@ -37,12 +36,17 @@ class Simulation:
     """
     Main simulation object
     """
+    dimensions = ('z','y','x')
+
     def __init__(self, masses, space, mass_labels=None, G=Gsolar, cp=None):
         if isinstance(masses, list): masses = np.array(masses)
         masses.flags.writeable = False # makes masses a constant
         self.mass_components = masses
         self.mass_sums = [np.sum(m) for m in self.mass_components]
-        self.mass_labels = mass_labels
+        if mass_labels is not None:
+            self.mass_labels = mass_labels
+        else:
+            self.mass_labels = ["mass %s" % i for i in range(len(masses))]
         self.space = space
         self.G = G
         self.cp = cp
@@ -79,7 +83,7 @@ class Simulation:
         self.log("Setting up %s gravity tasks, using %s" % (tasks, memory_usage()))
         for count, p in enumerate(point_list):
             if p not in self.results:
-                r = gravity_worker(p, self.mass_components, self.space.scale, self.G)
+                r = gravity_worker(p, self.mass_components, self.space.scale)
                 toc = time.perf_counter()
                 diff = (toc-tic)
                 self.log("%s of %s, %.2fs in, %.2fs left, using %s" % (count+1, tasks, diff, diff*(tasks-count)/(count+1), memory_usage()))
@@ -89,38 +93,38 @@ class Simulation:
         
         toc = time.perf_counter()
         self.log("completed in %.2f seconds" % (toc-tic))
-        self.__clear_cache()
         
-    def __clear_cache(self):
-        # clear cached_property of dataframe
-        try:
-            del self.dataframe_raw
-            del self.dataframe_sum
-        except AttributeError:
-            pass
+    def dataframe(self, mass_ratios=None, G=None):
+        # So can override G
+        if G is None: G = self.G
+        elif G is False: G = 1
 
-    def dataframe_raw(self):
+        # So can override mass_ratios
+        # both applied later on dataform creation
+        if mass_ratios is None: mass_ratios = self.mass_ratios()
+        elif mass_ratios is False: mass_ratios = dict([(c, 1) for c in self.mass_labels])
+
         data = []
-        dimensions = ('z','y','x')
+        absvec = ('vec', 'abs')
+        
         for ijk, result in self.results.items():
             rr = {}
             for mi, mass_res in enumerate(result):
-                rr = dict([(d, ijk[di]) for di, d in enumerate(dimensions)])
-                rr['component'] = self.mass_labels[mi] if self.mass_labels is not None else mi
+                component = self.mass_labels[mi]
+                rr = dict([(d, ijk[di]) for di, d in enumerate(self.dimensions)])
+                rr['component'] = component
                 
-                for ci, clabel in enumerate(('vec', 'abs')):
+                for ci, clabel in enumerate(absvec):
                     for di, v in enumerate(mass_res[ci]):
-                        key = "%s_%s" % (dimensions[di], clabel)
-                        rr[key] = v
+                        key = "%s_%s" % (self.dimensions[di], clabel)
+                        rr[key] = v*G*mass_ratios[component]
                 data.append(rr)
-        return data
-
-    @cached_property
-    def dataframe(self):
-        return pd.DataFrame(self.dataframe_raw())
-
-    def dataframe_sum(self):
-        return self.dataframe.groupby(['z','y','x','zd','rd']).sum().reset_index()
+        
+        df = pd.DataFrame(data)
+        # Work out total F
+        for label in absvec:
+            df['F_%s' % label] = (np.sum([df['%s_%s' % (d, label)]**2 for d in self.dimensions], axis=0))**0.5
+        return df
 
     def mass_ratios(self, speak=False):
         ratios = {}
@@ -128,18 +132,17 @@ class Simulation:
         for i, mass in enumerate(self.mass_sums):
             label = self.mass_labels[i]
             ref = self.profiles[label]['mass']
-            ratio = mass/ref[0]
+            ratio = ref[0]/mass
             ratios[label] = ratio
             msg.append("%s is %.2f%% off, at %s against reference %s" % (label, (ratio-1)*100, mass, ref))
         if speak: self.log("\n".join(msg))
-        return ratios        
+        return ratios
 
     def combine_masses(self):
         """ Combines the mass components into a single mass, to speed up analysis of large spaces """
         self.mass_components = np.array([np.sum(self.mass_components, axis=0),])
         self.mass_labels = ['combined',]
         self.results = {}
-        self.__clear_cache()
 
     def log(self, *args, **kwargs):
         """ Outputs to notebook """
