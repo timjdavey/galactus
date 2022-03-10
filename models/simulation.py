@@ -16,12 +16,16 @@ Gkg = 6.67430*(10**-11) # m3 kg-1 s-2
 Gsolar = 4.30091*(10**-6) # kpc Ms-1 (km/s)2
 
 def gravity_worker(position, masses, scale):
+    
+    # matrix of distances in indices space from position
     indices = np.indices(masses.shape[1:])
     deltas = np.array([(indices[i]-c)*scale for i, c in enumerate(position)])
 
-    r2 = np.sum(deltas**2, axis=0)
-    r2[tuple(position)] = 1e6 # handle the divide by zero error for position
-    r3 = r2**1.5
+    # convert that to r^3 distances in space
+    # r^2 for Force formula, plus one as normalise vectors in each axis
+    r3 = np.sum(deltas**3, axis=0)
+    # handle the divide by zero error for position
+    r3[tuple(position)] = 1e6
 
     results = []
     for mass in masses:
