@@ -21,11 +21,12 @@ def gravity_worker(position, masses, scale):
     indices = np.indices(masses.shape[1:])
     deltas = np.array([(indices[i]-c)*scale for i, c in enumerate(position)])
 
-    # convert that to r^3 distances in space
-    # r^2 for Force formula, plus one as normalise vectors in each axis
-    r3 = np.sum(deltas**3, axis=0)
+    # r^2 for Force formula
+    r2 = np.sum(deltas**2, axis=0)
     # handle the divide by zero error for position
-    r3[tuple(position)] = 1e6
+    r2[tuple(position)] = 1e6
+    # convert that to r^3 to normalise vectors in each axis
+    r3 = r2**1.5
 
     results = []
     for mass in masses:
@@ -162,12 +163,15 @@ class Simulation:
             g = sns.lineplot(y=self.sums[k][stack][row], x=self.space.x, ax=axes[i])
             g.set(title=k)
 
-    def mass_profile(self, stack=None, cmap='Spectral_r'):
+    @property
+    def mass_sum(self):
+        return np.sum(self.mass_components, axis=0)
+
+    def mass_profile(self, stack=None, cmap='Spectral_r', ax=None):
         """ Heatmap of mass over space """
         if stack is None: stack = self.space.center[0]
-        fig, axes = plt.subplots(figsize=(15,10))
         sns.heatmap(self.mass_sum[stack],
-            cmap=cmap,
+            cmap=cmap, ax=ax,
             square=True, norm=LogNorm(),
             xticklabels=self.space.x, yticklabels=self.space.coords[1]*self.space.scale)
 

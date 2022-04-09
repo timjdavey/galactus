@@ -2,6 +2,7 @@
 *.pickle
 *.npy
 mprofile*
+references/raw*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

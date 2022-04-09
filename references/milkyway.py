@@ -17,7 +17,7 @@ https://academic.oup.com/view-large/18663759
 """
 
 profiles['mcmillian2011'] = {
-    'buldge': {
+    'bulge': {
         'params': {
             'p0':9.93*(10**10), # scale density M kpc^-3 
             'q':0.5, # axial ratio
@@ -25,7 +25,7 @@ profiles['mcmillian2011'] = {
             'r0':0.075, # kpc
             'alpha':1.8,
         },
-        'func': 'buldge',
+        'func': 'bulge',
         'mass': [8.9*(10**9), (8.9*(10**9))*1.1, (8.9*(10**9))*0.9], # Table 1
     },
     'thick': {
@@ -48,7 +48,7 @@ profiles['mcmillian2011'] = {
 
 # Table 2 Best values
 profiles['mcmillian2011best'] = deepcopy(profiles['mcmillian2011'])
-profiles['mcmillian2011best']['buldge']['params']['p0'] = 9.56*(10**10)
+profiles['mcmillian2011best']['bulge']['params']['p0'] = 9.56*(10**10)
 profiles['mcmillian2011best']['thick']['params']['sig0'] = 209.5*(10**6)
 profiles['mcmillian2011best']['thick']['params']['Rd'] = 3.31
 profiles['mcmillian2011best']['thin']['params']['sig0'] = 816.6*(10**6)
@@ -113,7 +113,7 @@ observations['huang2016'] = {
 }
 
 profiles['huang2016'] = {
-    'buldge': {
+    'bulge': {
         'params': {
             'p0':9.93*(10**10), # scale density M kpc^-3 (rho b0)
             'q':0.5, # axial ratio
@@ -121,7 +121,7 @@ profiles['huang2016'] = {
             'r0':0.075, # kpc (rb0)
             'alpha':1.8, # (beta)
         },
-        'func': 'buldge',
+        'func': 'bulge',
         'mass': [8.9*(10**9),(8.9*(10**9))*1.1,(8.9*(10**9))*0.9],
     },
     'thin': {

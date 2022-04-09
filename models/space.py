@@ -57,6 +57,10 @@ class Space:
         """ An iterable of all coords """
         return itertools.product(*[range(p) for p in self.points])
 
+    @property
+    def radius(self):
+        return self.points[1]*self.scale/2
+    
     def rz(self):
         indices = np.indices(self.points)
         z = np.abs(indices[0] - self.center[0])*self.scale

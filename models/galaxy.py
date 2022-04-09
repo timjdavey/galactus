@@ -6,9 +6,41 @@ from .space import Space
 from .simulation import Simulation
 from .memory import memory_usage
 
+
 class Galaxy(Simulation):
     """
-    Wrapper around Simulation.
+    Helps with a few functions
+
+    """
+
+    def radius_points(self, radius=None, points=None):
+        """
+        Calculates for a set number of :points:, up to a maximum :radius:
+        Returns a list of points to analyse
+        """
+        calc_radius = radius if radius is not None else self.radius
+        percent = radius/self.space.radius
+        rl = self.space.radius_list
+        max_point = len(rl)*percent
+        calc_points = points if points is not None else max_point
+        return rl[:int(max_point)+1:max(int(max_point/points),1)][:points]
+
+    def dataframe(self, *args, **kwargs):
+        """ Returns analysis as a dataframe, adding the radius """
+        df = super().dataframe(*args, **kwargs)
+        c = self.space.center
+        scale = self.space.scale
+        df['zd'] = (df['z']-c[0])*scale
+        df['rd'] = scale*((df['y']-c[1])**2 + (df['x']-c[2])**2)**0.5
+        return df
+
+
+class ExpoGalaxy(Galaxy):
+    """
+    Wrapper around Galaxy.
+
+    Specifically for Milky Way or any galaxy fitting typical
+    mass profile equations.
 
     Given a certain number of grid `points`,
     returns a `Simulation` with MilkyWay mass profile.
@@ -33,7 +65,7 @@ class Galaxy(Simulation):
         self.log('gen space, using %s' % memory_usage())
         space = Space((int(self.points/zcut), self.points, self.points), self.scale)
 
-        fl = dict([(f.__name__, f) for f in (buldge, disk)])
+        fl = dict([(f.__name__, f) for f in (bulge, disk)])
 
         tic = time.perf_counter()
         masses = []
@@ -54,28 +86,8 @@ class Galaxy(Simulation):
         masses.flags.writeable = False
         super().__init__(masses, space, cp=cp, mass_labels=mass_labels, *args, **kwargs)
 
-    def radius_points(self, radius=None, points=None):
-        """
-        Calculates for a set number of :points:, up to a maximum :radius:
-        Returns a list of points to analyse
-        """
-        calc_radius = radius if radius is not None else self.radius
-        percent = radius/self.radius
-        rl = self.space.radius_list
-        max_point = len(rl)*percent
-        calc_points = points if points is not None else max_point
-        return rl[:int(max_point)+1:max(int(max_point/points),1)][:points]
 
-    def dataframe(self, *args, **kwargs):
-        """ Returns analysis as a dataframe, adding the radius """
-        df = super().dataframe(*args, **kwargs)
-        c = self.space.center
-        scale = self.space.scale
-        df['zd'] = (df['z']-c[0])*scale
-        df['rd'] = scale*((df['y']-c[1])**2 + (df['x']-c[2])**2)**0.5
-        return df
-
-def buldge(R, z, p0, q, rcut, r0, alpha):
+def bulge(R, z, p0, q, rcut, r0, alpha):
     """
     Equation 1 & 2
     https://academic.oup.com/mnras/article/414/3/2446/1042117?login=true#m1
