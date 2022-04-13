@@ -9,7 +9,6 @@ def load(filename, directory=DIR, masses=True):
     """
     Loads a pickled simulation from experiments with a given filename.
     """
-    import pickle
     nbsetup.cp("Loading %s" % filename)
     with open("%s%s.pickle" % (directory,filename), 'rb') as f:
         sim = pickle.load(f)
@@ -21,6 +20,23 @@ def load(filename, directory=DIR, masses=True):
     
     sim.log("Loaded %s" % filename)
     return sim
+
+
+def load_sparc(uids, directory=DIR, ignore=True):
+    """
+    Loads sparc simulations for a given set of galaxy ids
+    """
+    simulations = {}
+    for uid in uids:
+        try:
+            with open("%ssparc_%s.pickle" % (directory,uid), 'rb') as f:
+                simulations[uid] = pickle.load(f)
+        except FileNotFoundError:
+            if ignore:
+                pass
+            else:
+                raise FileNotFoundError(uid)
+    return simulations
 
 
 def load_components(filename, profiles, directory=DIR):

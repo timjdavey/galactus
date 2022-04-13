@@ -99,7 +99,7 @@ class Simulation:
         toc = time.perf_counter()
         self.log("completed in %.2f seconds" % (toc-tic))
         
-    def dataframe(self, mass_ratios=None, G=None):
+    def dataframe(self, mass_ratios=None, G=None, combined=False):
         # So can override G
         if G is None: G = self.G
         elif G is False: G = 1
@@ -129,7 +129,11 @@ class Simulation:
         # Work out total F
         for label in absvec:
             df['F_%s' % label] = (np.sum([df['%s_%s' % (d, label)]**2 for d in self.dimensions], axis=0))**0.5
-        return df
+
+        if combined:
+            return df.groupby(['x','y','z']).sum().reset_index()
+        else:
+            return df
 
     def mass_ratios(self, speak=False):
         ratios = {}
