@@ -23,6 +23,7 @@ def generate_profiles():
     decomps = sparc_imports.decomp_dict(guids)
     rt = sparc_imports.rotmass_dict(guids)
     #rt_df = pd.concat(rt.values(), ignore_index=True)
+    rar_df = sparc_imports.rar_df()
     
     # making new list of uniques, minus the missing files from rotmass
     guids = list(rt.keys())
@@ -32,9 +33,10 @@ def generate_profiles():
         profiles[uid] = SparcMassProfile(
             uid = uid,
             sparc_df = sparc_table1.query('Galaxy=="%s"' % uid),
+            rar_df = rar_df.query('Galaxy=="%s"' % uid),
             decomps_df = decomps[uid],
             rotmass_df = rt[uid],
-            mm_df = mm_df.query('ID=="%s"' % uid)
+            mm_df = mm_df.query('ID=="%s"' % uid),
         )
     return profiles
 
@@ -65,11 +67,15 @@ def df2dict(df):
     """ Like .to_dict() but avoids the index """
     return dict([(k, np.array(df[k].values)) for k in df.columns])
 
-def cos(deg):
+def dfrowdict(df):
+    return dict([(k, list(v.values())[0]) for k,v in df.to_dict().items()])
+
+def cos(deg, func=np.cos):
     """ Do cos in degrees rather than radians """
-    return np.cos(deg*np.pi/180)
+    return func(deg*np.pi/180)
 
 COLOR_SCHEME = {'gas': 'teal', 'disk': 'darkorange', 'bul': 'mediumpurple', 'obs': 'black'}
+
 
 
 class SparcMassProfile:
@@ -77,21 +83,90 @@ class SparcMassProfile:
     Mass Profile for Sparc data for a given galaxy
     """
     def __init__(self, uid,
-            sparc_df, decomps_df, rotmass_df, mm_df,
-            auto_fit=True, extend_decomp=True):
+            sparc_df, decomps_df, rotmass_df, mm_df, rar_df,
+            auto_fit=True, rar_fit=False, extend_decomp=True):
+
         self.uid = uid
-        self.sparc_df = sparc_df
-        self.sparc_dict = dict([(k, list(v.values())[0]) for k,v in sparc_df.to_dict().items()])
+        self.sparc_dict = dfrowdict(sparc_df)
+        self.rar_dict = dfrowdict(rar_df)
+
         self.decomps_df = decomps_df
-        self.decomps_dict = df2dict(decomps_df)
         self.rotmass_df = rotmass_df
-        self.rotmass_dict = df2dict(rotmass_df)
         self.mm_df = mm_df
+
+        self.orig_decomps_df = decomps_df
+        self.orig_rotmass_df = rotmass_df
+        self.orig_mm_df = mm_df
+
+        self.decomps_dict = df2dict(decomps_df)
+        self.rotmass_dict = df2dict(rotmass_df)
         self.mm_dict = df2dict(mm_df)
+
         self.auto_fit = auto_fit
+        self.rar_fit = rar_fit
         self.extend_decomp = extend_decomp
         self.inc_used = None
+
+
+    def fit_rar_data(self, do_rar):
+        """
+        Feels weird doing it this way,
+        but here we've got to the option to call a function
+        to update the data using rar_fit
+
+        But runs similar to auto_fit,
+        where you can mark the rar_fit bool
+        so stays consistent
     
+        Also, is a good way to reset all the df
+        values without having to think about
+        which df's to use
+
+        Eq.4 & 5
+        """
+        df_keys = ('decomps', 'rotmass', 'mm')
+
+        if do_rar:
+            # R's
+            dprimed = self.rar_dict['D']/self.sparc_dict['D']
+            
+            # make copies of the original dfs
+            dfs = {}
+            for df_key in df_keys:
+                dfs[df_key] = getattr(self, 'orig_%s_df' % df_key).copy()
+
+            for df in dfs.values():
+                df['R'] = df['R']*dprimed
+    
+            # D's
+            dfs['mm']['D'] = self.rar_dict['D']
+    
+            # adjust V components
+            for df_name in ('rotmass', 'mm'):
+                df = dfs[df_name]
+                for component in ('Vgas', 'Vbul', 'Vdisk'):
+                    df[component] = df[component]*(dprimed**0.5)
+    
+            # Vobs Eq.5
+            iiprime = cos(self.sparc_dict['Inc'], np.sin)/cos(self.rar_dict['Inc'], np.sin)
+    
+            for df_name in ('rotmass', 'mm'): 
+                df = dfs[df_name] 
+                df['Vobs'] = df['Vobs']*iiprime
+                df['Vobs'] = df['e_Vobs']*iiprime
+            
+            for df_key in df_keys:
+                setattr(self, '%s_df' % df_key, dfs[df_key])
+                setattr(self, '%s_dict' % df_key, df2dict(dfs[df_key]))
+        
+        else:
+            # reset to the original values
+            for df_key in df_keys:
+                odf = getattr(self, 'orig_%s_df' % df_key)
+                setattr(self, '%s_df' % df_key, odf)
+                setattr(self, '%s_dict' % df_key, df2dict(odf))
+
+
     @property
     def is_bul(self):
         """ Does it have a bulge? """
@@ -111,18 +186,27 @@ class SparcMassProfile:
 
     def _decomps(self):
         """ Decomposition data """
+        
+        # then update the values to rar_fit if need be
+        self.fit_rar_data(self.rar_fit)
+
         # automatically fit decomposition profile
         # to the pre-decomposed points in the mass model
+        # this to be updated when find out what the actual is
         if self.auto_fit:
             def interop(xdata, deg):
                 return np.interp(xdata,
                     self.decomps_dict['R'],
                     self.decomps_dict['SBdisk'])*cos(deg)
             
-            inc = sp.optimize.curve_fit(interop, self.mm_dict['R'], self.mm_dict['SBdisk'])[0][0]
+            bounds = [0,90]
+            inc = sp.optimize.curve_fit(interop, self.mm_dict['R'],
+                        self.mm_dict['SBdisk'], bounds=bounds)[0][0]
         else:
             inc = self.sparc_dict['Inc']
         
+
+        # run the rest
         self.inc_used = inc
         err = self.sparc_dict['e_Inc']
         adjs = [cos(inc), cos(inc+err), cos(inc-err)]
@@ -161,6 +245,21 @@ class SparcMassProfile:
         
         return data
     
+    def mass_ratios(self):
+        """
+        Using sparc defaults
+        Or Rar fits
+        """
+        defaults = {'disk': 0.5, 'gas': 1.0}
+        if self.is_bul:
+            defaults = {'bul': 0.7}
+
+        if self.rar_fit:
+            for key in defaults.keys():
+                defaults[key] = self.rar_fit[key]
+        else:
+            return defaults
+
     def masses(self, space):
         """ Generates the mass profiles for a given space object """
         dc = self._decomps()
@@ -208,5 +307,5 @@ class SparcMassProfile:
             if len(data) > 1:
                 g.fill_between(r, data[1], data[2], alpha=0.1, color=color)
         
-        g.set(title="%s. %s inc:%sdeg" % (index, self.uid, self.inc_used))
+        g.set(title="%s. %s inc:%sdeg rar:%sdeg" % (index, self.uid, self.inc_used, self.rar_dict['Inc']))
         

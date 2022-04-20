@@ -55,9 +55,15 @@ def decomp_dict(uids, directory=DIR):
 def rotmass_dict(uids, ignore=True, directory=DIR):
     """ Returns the rotmass data (augmented mass model data) """
     return df_multi(uids, '%sRotmass/%%s_rotmass.dat' % directory, ignore,\
-        "R,Vobs,errV,Vgas,Vdisk,Vbul,SBgas,SBdisk,SBbul",3)
+        "R,Vobs,e_Vobs,Vgas,Vdisk,Vbul,SBgas,SBdisk,SBbul",3)
 
 def galaxy_list():
     """ List of all the galaxies """
     return list(sparc_df()['Galaxy'].unique())
 
+def rar_df(directory=DIR):
+    """ Returns Rar fits from Li's paper
+    Taken straight from paper, not available on website,
+    so included in repo.
+    """
+    return pd.read_csv("%s../../rar_fit.csv" % DIR)
