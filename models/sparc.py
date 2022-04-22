@@ -110,6 +110,8 @@ class SparcMassProfile:
 
     def fit_rar_data(self, do_rar):
         """
+        https://www.aanda.org/articles/aa/pdf/2018/07/aa32547-17.pdf
+
         Feels weird doing it this way,
         but here we've got to the option to call a function
         to update the data using rar_fit
@@ -250,15 +252,13 @@ class SparcMassProfile:
         Using sparc defaults
         Or Rar fits
         """
-        defaults = {'disk': 0.5, 'gas': 1.0}
-        if self.is_bul:
-            defaults = {'bul': 0.7}
+        mrs = {'disk': 0.5, 'gas': 1.0, 'bul': 0.7}
 
         if self.rar_fit:
-            for key in defaults.keys():
-                defaults[key] = self.rar_fit[key]
-        else:
-            return defaults
+            for key in ('disk', 'bul'):
+                mrs[key] = self.rar_dict['Y%s' % key]
+        
+        return mrs
 
     def masses(self, space):
         """ Generates the mass profiles for a given space object """
