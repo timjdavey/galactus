@@ -41,28 +41,6 @@ def generate_profiles():
     return profiles
 
 
-def generate_galaxy(profile, space_points=5000, calc_points=20, cp=None):
-    """
-    Generates a galaxy given a profile
-    """
-    uid = profile.uid
-    space = Space((1,space_points,space_points), profile.max_r*4/space_points)
-    masses, labels = profile.masses(space)
-    
-    sim = Galaxy(masses, space, mass_labels=labels, cp=cp)
-    sim.profile = profile
-    sim.name = uid
-    
-    if calc_points:
-        points = sim.radius_points(profile.max_r*1.5, calc_points)
-    else:
-        points = profile.rotmass_points(space)
-    
-    sim.analyse(points)
-    return sim
-
-
-
 def df2dict(df):
     """ Like .to_dict() but avoids the index """
     return dict([(k, np.array(df[k].values)) for k in df.columns])
@@ -70,9 +48,6 @@ def df2dict(df):
 def dfrowdict(df):
     return dict([(k, list(v.values())[0]) for k,v in df.to_dict().items()])
 
-def cos(deg, func=np.cos):
-    """ Do cos in degrees rather than radians """
-    return func(deg*np.pi/180)
 
 COLOR_SCHEME = {'gas': 'teal', 'disk': 'darkorange', 'bul': 'mediumpurple', 'obs': 'black'}
 
@@ -84,7 +59,7 @@ class SparcMassProfile:
     """
     def __init__(self, uid,
             sparc_df, decomps_df, rotmass_df, mm_df, rar_df,
-            auto_fit=True, rar_fit=False, extend_decomp=True):
+            auto_fit=True, extend_decomp=True):
 
         self.uid = uid
         self.sparc_dict = dfrowdict(sparc_df)
@@ -103,70 +78,8 @@ class SparcMassProfile:
         self.mm_dict = df2dict(mm_df)
 
         self.auto_fit = auto_fit
-        self.rar_fit = rar_fit
         self.extend_decomp = extend_decomp
         self.inc_used = None
-
-
-    def fit_rar_data(self, do_rar):
-        """
-        https://www.aanda.org/articles/aa/pdf/2018/07/aa32547-17.pdf
-
-        Feels weird doing it this way,
-        but here we've got to the option to call a function
-        to update the data using rar_fit
-
-        But runs similar to auto_fit,
-        where you can mark the rar_fit bool
-        so stays consistent
-    
-        Also, is a good way to reset all the df
-        values without having to think about
-        which df's to use
-
-        Eq.4 & 5
-        """
-        df_keys = ('decomps', 'rotmass', 'mm')
-
-        if do_rar:
-            # R's
-            dprimed = self.rar_dict['D']/self.sparc_dict['D']
-            
-            # make copies of the original dfs
-            dfs = {}
-            for df_key in df_keys:
-                dfs[df_key] = getattr(self, 'orig_%s_df' % df_key).copy()
-
-            for df in dfs.values():
-                df['R'] = df['R']*dprimed
-    
-            # D's
-            dfs['mm']['D'] = self.rar_dict['D']
-    
-            # adjust V components
-            for df_name in ('rotmass', 'mm'):
-                df = dfs[df_name]
-                for component in ('Vgas', 'Vbul', 'Vdisk'):
-                    df[component] = df[component]*(dprimed**0.5)
-    
-            # Vobs Eq.5
-            iiprime = cos(self.sparc_dict['Inc'], np.sin)/cos(self.rar_dict['Inc'], np.sin)
-    
-            for df_name in ('rotmass', 'mm'): 
-                df = dfs[df_name] 
-                df['Vobs'] = df['Vobs']*iiprime
-                df['Vobs'] = df['e_Vobs']*iiprime
-            
-            for df_key in df_keys:
-                setattr(self, '%s_df' % df_key, dfs[df_key])
-                setattr(self, '%s_dict' % df_key, df2dict(dfs[df_key]))
-        
-        else:
-            # reset to the original values
-            for df_key in df_keys:
-                odf = getattr(self, 'orig_%s_df' % df_key)
-                setattr(self, '%s_df' % df_key, odf)
-                setattr(self, '%s_dict' % df_key, df2dict(odf))
 
 
     @property
@@ -188,9 +101,7 @@ class SparcMassProfile:
 
     def _decomps(self):
         """ Decomposition data """
-        
-        # then update the values to rar_fit if need be
-        self.fit_rar_data(self.rar_fit)
+
 
         # automatically fit decomposition profile
         # to the pre-decomposed points in the mass model
@@ -246,19 +157,6 @@ class SparcMassProfile:
             data['bul'] = (self.decomps_dict['R'], [self.decomps_dict['SBbul']*a for a in adjs])
         
         return data
-    
-    def mass_ratios(self):
-        """
-        Using sparc defaults
-        Or Rar fits
-        """
-        mrs = {'disk': 0.5, 'gas': 1.0, 'bul': 0.7}
-
-        if self.rar_fit:
-            for key in ('disk', 'bul'):
-                mrs[key] = self.rar_dict['Y%s' % key]
-        
-        return mrs
 
     def masses(self, space):
         """ Generates the mass profiles for a given space object """

@@ -35,7 +35,7 @@ class Galaxy(Simulation):
         return df
 
 
-class ExpoGalaxy(Galaxy):
+class SersicGalaxy(Galaxy):
     """
     Wrapper around Galaxy.
 

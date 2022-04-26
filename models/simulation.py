@@ -99,15 +99,19 @@ class Simulation:
         toc = time.perf_counter()
         self.log("completed in %.2f seconds" % (toc-tic))
         
-    def dataframe(self, mass_ratios=None, G=None, combined=False):
+    def dataframe(self, mass_ratios=False, G=None, combined=False):
         # So can override G
-        if G is None: G = self.G
-        elif G is False: G = 1
+        if G is None:
+            G = self.G
+        elif G is False:
+            G = 1
 
         # So can override mass_ratios
         # both applied later on dataform creation
-        if mass_ratios is None: mass_ratios = self.mass_ratios()
-        elif mass_ratios is False: mass_ratios = dict([(c, 1) for c in self.mass_labels])
+        if mass_ratios is None:
+            mass_ratios = self.mass_ratios()
+        elif mass_ratios is False:
+            mass_ratios = dict([(c, 1) for c in self.mass_labels])
 
         data = []
         absvec = ('vec', 'abs')
@@ -177,7 +181,8 @@ class Simulation:
         sns.heatmap(self.mass_sum[stack],
             cmap=cmap, ax=ax,
             square=True, norm=LogNorm(),
-            xticklabels=self.space.x, yticklabels=self.space.coords[1]*self.space.scale)
+            xticklabels=None, yticklabels=None)
+            #xticklabels=self.space.x, yticklabels=self.space.coords[1]*self.space.scale)
 
     def save(self, filename, masses=True):
         import pickle

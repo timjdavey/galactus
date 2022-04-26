@@ -22,15 +22,22 @@ def load(filename, directory=DIR, masses=True):
     return sim
 
 
-def load_sparc(uids, directory=DIR, ignore=True):
+def load_sparc(uids=None, directory=DIR, ignore=True):
     """
     Loads sparc simulations for a given set of galaxy ids
+    Reassigns the profiles to refresh them just in case
+    we update the model with extra functions etc
     """
+    from sparc.massprofile import generate_profiles
+    profiles = generate_profiles()
+
     simulations = {}
-    for uid in uids:
+    for uid, prof in profiles.items():
         try:
             with open("%ssparc_%s.pickle" % (directory,uid), 'rb') as f:
-                simulations[uid] = pickle.load(f)
+                sim = pickle.load(f)
+                sim.profile = prof
+                simulations[uid] = sim
         except FileNotFoundError:
             if ignore:
                 pass

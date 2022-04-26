@@ -15,8 +15,9 @@ def generate_sparc_simulation_worker(arguments):
     uid = prof.uid
     prof.rar_fit = True
     print("Creating %s. %s using %s" % (i, uid, memory_usage()))
-    sim = generate_galaxy(prof, 3000, 20)
-    sim.save("rar_sparc_%s" % uid, masses=False)
+    sim = generate_galaxy(prof, 1000, 20, False)
+    sim.profile = None # is assigned on load
+    sim.save("sparc_%s" % uid, masses=False)
     del prof
     del sim
     print("Finished %s. %s using %s" % (i, uid, memory_usage()))
@@ -24,7 +25,7 @@ def generate_sparc_simulation_worker(arguments):
 
 
 if __name__ == '__main__':
-    pools = 4
+    pools = 1
     profiles = generate_profiles()
 
     with Pool(processes=pools) as pool:
