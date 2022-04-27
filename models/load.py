@@ -28,7 +28,7 @@ def load_sparc(uids=None, directory=DIR, ignore=True):
     Reassigns the profiles to refresh them just in case
     we update the model with extra functions etc
     """
-    from sparc.massprofile import generate_profiles
+    from models.sparc.profile import generate_profiles
     profiles = generate_profiles()
 
     simulations = {}

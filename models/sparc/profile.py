@@ -3,6 +3,7 @@ sys.path.append("../")
 
 from models.space import Space
 from models.galaxy import Galaxy
+from models.equations import cos
 from references import sparc as sparc_imports
 
 import numpy as np

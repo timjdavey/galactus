@@ -14,9 +14,10 @@ def generate_galaxy(profile, space_points=5000, calc_points=20, rotmass_points=F
     sim.profile = profile
     sim.name = uid
     
-    if calc_points:
-        sim.analyse(sim.radius_points(profile.max_r*1.5, calc_points))
     if rotmass_points:
         sim.analyse(profile.rotmass_points(space))
+    
+    if calc_points:
+        sim.analyse(sim.radius_points(profile.max_r*1.5, calc_points))
     
     return sim

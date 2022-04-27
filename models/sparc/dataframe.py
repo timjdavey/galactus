@@ -7,7 +7,7 @@ from models.equations import velocity, sin, null_gravity
 
 def load_analysis():
     simulations = load_sparc()
-    dfs = [augment_df(sim) for sim in simulations]
+    dfs = [augment_df(sim, idx=i) for i, sim in enumerate(simulations.values())]
     return pd.concat(dfs, ignore_index=True)
 
 
@@ -18,10 +18,14 @@ IDENTIFIERS = {
 }
 
 
-def augment_df(sim, mrs=None, distance=None, inclination=None):
+def augment_df(sim, mrs=None, distance=None, inclination=None, idx=None):
     
     # use rotmass as base df
     df = sim.profile.rotmass_df.copy()
+
+    # index galaxy
+    if idx is not None:
+        df['gidx'] = idx
 
     # append sparc table1 interesting parameters
     for k in ('D', 'e_D', 'Inc', 'e_Inc', 'Vflat', 'e_Vflat', 'Q', 'MHI', 'L[3.6]'):
@@ -52,19 +56,26 @@ def augment_df(sim, mrs=None, distance=None, inclination=None):
     # calculate additional added needed for benchmarking rar
     df['Vbar'] = np.sum([mrs[c]*df["V%s" % c]**2 for c in sim.mass_labels],axis=0)**0.5
     df['gobs'] = df['Vobs']**2/R
+    df['log_gobs'] = np.log10(df['gobs'])
 
     # interp force values from simulation
     sdf = sim.dataframe(mass_ratios=mrs, combined=True)
-    df['newton_force'] = np.interp(R, cdf['rd'], sdf['x_vec'])
-    df['abs_force'] = np.interp(R, cdf['rd'], sdf['x_abs'])
-    df['nulled'] = df['abs_force']-df['newton_force']
+    df['Fnewton'] = np.interp(R, sdf['rd'], sdf['x_vec'])
+    df['Fabs'] = np.interp(R, sdf['rd'], sdf['x_abs'])
+    df['Fnulled'] = df['Fabs']-df['Fnewton']
 
     # calculate Wbar from simulation force values
-    df['Wbar'] = velocity(R, df['newton_force'])
+    df['Wbar'] = velocity(R, df['Fnewton'])
+
+    # benchmark log bars, so can filter data
+    # for a certain quality threshold
+    df['VWdiff'] = (full_df['log_V_gbar']-full_df['log_W_gbar'])**0.5
 
     # finally calculate the gbars
     for v in IDENTIFIERS.keys():
-        df['%s_gbar' % v] = df[key]**2/R
+        key = '%s_gbar' % v
+        df[key] = df['%sbar' % v]**2/R
+        df['log_%s' % key] = np.log10(df[key])
 
     return df
 
