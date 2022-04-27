@@ -1,21 +1,7 @@
 import pandas as pd
 import numpy as np
 
-from models.load import load_sparc
 from models.equations import velocity, sin, null_gravity
-
-
-def load_analysis():
-    simulations = load_sparc()
-    dfs = [augment_df(sim) for sim in simulations.values()]
-    return pd.concat(dfs, ignore_index=True)
-
-
-IDENTIFIERS = {
-    'V': 'Original SPARC mass models',
-    'W': 'Simulation data of SPARC models',
-    #'T': 'Null adjusted'
-}
 
 
 def augment_df(sim, mrs=None, distance=None, inclination=None):
@@ -64,14 +50,14 @@ def augment_df(sim, mrs=None, distance=None, inclination=None):
     df['Wbar'] = velocity(R, df['Fnewton'])
 
     # finally calculate the gbars
-    for v in IDENTIFIERS.keys():
+    for v in ('V', 'W'):
         key = '%sgbar' % v
         df[key] = df['%sbar' % v]**2/R
         df['log_%s' % key] = np.log10(df[key])
 
     # benchmark log bars, so can filter data
     # for a certain quality threshold
-    df['VWdiff'] = (df['log_Vgbar']-df['log_Wgbar'])**2
+    df['VWdiff'] = np.abs(df['log_Vgbar']-df['log_Wgbar'])
 
     return df
 
