@@ -7,7 +7,7 @@ from models.equations import velocity, sin, null_gravity
 
 def load_analysis():
     simulations = load_sparc()
-    dfs = [augment_df(sim, idx=i) for i, sim in enumerate(simulations.values())]
+    dfs = [augment_df(sim) for sim in simulations.values()]
     return pd.concat(dfs, ignore_index=True)
 
 
@@ -18,14 +18,10 @@ IDENTIFIERS = {
 }
 
 
-def augment_df(sim, mrs=None, distance=None, inclination=None, idx=None):
+def augment_df(sim, mrs=None, distance=None, inclination=None):
     
     # use rotmass as base df
     df = sim.profile.rotmass_df.copy()
-
-    # index galaxy
-    if idx is not None:
-        df['gidx'] = idx
 
     # append sparc table1 interesting parameters
     for k in ('D', 'e_D', 'Inc', 'e_Inc', 'Vflat', 'e_Vflat', 'Q', 'MHI', 'L[3.6]'):
@@ -67,15 +63,15 @@ def augment_df(sim, mrs=None, distance=None, inclination=None, idx=None):
     # calculate Wbar from simulation force values
     df['Wbar'] = velocity(R, df['Fnewton'])
 
-    # benchmark log bars, so can filter data
-    # for a certain quality threshold
-    df['VWdiff'] = (full_df['log_V_gbar']-full_df['log_W_gbar'])**0.5
-
     # finally calculate the gbars
     for v in IDENTIFIERS.keys():
-        key = '%s_gbar' % v
+        key = '%sgbar' % v
         df[key] = df['%sbar' % v]**2/R
         df['log_%s' % key] = np.log10(df[key])
+
+    # benchmark log bars, so can filter data
+    # for a certain quality threshold
+    df['VWdiff'] = (df['log_Vgbar']-df['log_Wgbar'])**2
 
     return df
 
