@@ -91,7 +91,7 @@ class SparcMassProfile:
     @property
     def max_r(self):
         """ Last R recorded in profile data """
-        return self.decomps_dict['R'][-1]
+        return self.decomps_dict['R'].max()
     
     @property
     def is_valid(self):

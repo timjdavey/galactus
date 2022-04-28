@@ -16,20 +16,45 @@ SPARC_THRESHOLD = 'VWdiff<0.1'
 QUERIES = {
     'Everything': 'R>0',
     'Thresholded': SPARC_THRESHOLD,
-    'Quality': '%s & Q<3 & Inc<80 & Inc>20' % SPARC_THRESHOLD,
+    'Quality': 'Q<3 & Inc<80 & Inc>20',
+    'Quality Thresholded': '%s & Q<3 & Inc<80 & Inc>20' % SPARC_THRESHOLD,
 }
 
+QUALTIY = QUERIES.copy()
+del QUALTIY['Everything']
 
 class Result:
+    """
+    Wrapper class to do basic analysis on the whole SPARC set of results.
+    """
 
-    def __init__(self, queries=QUERIES, idens=('V','W')):
-        simulations = load_sparc()
+    def __init__(self, queries=QUERIES, idens=('V','W'), adjustments=None, simulations=None):
+        
+        # load all that it can find
+        if simulations is None:
+            simulations = load_sparc()
+
         dfs = []
-        for sim in simulations.values():
-            dfs.append(augment_df(sim))
+        for name, sim in simulations.items():
+            if adjustments is None:
+                dfs.append(augment_df(sim))
+            else:
+                gdf = adjustments.query("Galaxy=='%s'" % name)
+                dfs.append(augment_df(sim,
+                    mrs={
+                        'disk': gdf.Ydisk.values[0],
+                        'bul': gdf.Ybul.values[0],
+                        'gas': 1.0,
+                    },
+                    distance=gdf.D.values[0],
+                    inclination=gdf.Inc.values[0]))
+
         self.dataframe = pd.concat(dfs, ignore_index=True)
+        self.simulations = simulations
         self.queries = queries
         self.idens = idens
+        self.adjustments = adjustments
+
 
     def datasets(self):
         """
@@ -48,6 +73,7 @@ class Result:
         self.dataframe[key] = self.dataframe['%sbar' % iden]**2/R
         self.dataframe['log_%s' % key] = np.log10(self.dataframe[key])
 
+
     def plot_thresholds(self):
         """
         Plots a histogram of the differences in V (sparc model) & W (simulated model)
@@ -59,6 +85,7 @@ class Result:
             df = datasets[name]
             g = sns.histplot(df['log_Vgbar']-df['log_Wgbar'], ax=axes[i])
             g.set(title=name)
+
 
     def plot_rar(self, kind=0, idens=None, line=[1,6]):
         """
@@ -111,6 +138,7 @@ class Result:
                 # reference line
                 sns.lineplot(x=line, y=line, color='grey', ax=ax, linestyle='dotted')
 
+
     def plot_rars(self, *args, **kwargs):
         """ Plots all the rar plots """
 
@@ -136,7 +164,8 @@ class Result:
                 bins=50, pthresh=.2, cmap="mako_r", alpha=0.6, ax=axes[i])
 
 
-    def plot_residuals(self, idens=None, query_key=None, checks=('rel_R', 'Fnulled', 'mhi_R', 'R', 'D', 'MHI'), non_log=('rel_R',)):
+    def plot_residuals(self, idens=None, query_key=None,
+            checks=('rel_R', 'Fnulled', 'mhi_R', 'R', 'D', 'MHI'), non_log=('rel_R',)):
         """ Plots the residuals """
 
         # only makes sense to do for one query group

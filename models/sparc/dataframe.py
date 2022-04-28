@@ -14,7 +14,6 @@ def augment_df(sim, mrs=None, distance=None, inclination=None):
         df[k] = sim.profile.sparc_dict[k]
     
     # additional calculations based on that data
-    df['u_Inc'] = sim.profile.inc_used
     df['rel_R'] = df['R']/df['R'].max()
     df['mhi_R'] = df['R']/df['MHI']
 
@@ -29,9 +28,9 @@ def augment_df(sim, mrs=None, distance=None, inclination=None):
     R = df['R']
     if distance is not None:
         dist_adjust = distance/sim.profile.sparc_dict['D']
-        R = R*inc_adjust
+        R = R*dist_adjust
         for c in sim.mass_labels:
-            df['V%s' % c] = df['V%s' % c]*(inc_adjust**0.5)
+            df['V%s' % c] = df['V%s' % c]*(dist_adjust**0.5)
     if inclination is not None:
         df['Vobs'] = df['Vobs']*sin(df['Inc'])/sin(inclination)
 

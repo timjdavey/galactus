@@ -67,3 +67,21 @@ def rar_df(directory=DIR):
     so included in repo.
     """
     return pd.read_csv("%s../../rar_fit.csv" % DIR)
+
+def adjustment_df(directory=DIR):
+    # create a clean sparc base
+    sdf = sparc_df(directory=DIR)
+    standard_cols = ['Inc', 'e_Inc', 'D', 'e_D', 'Galaxy']
+    sdf = sdf[standard_cols+['f_D',]].copy()
+    sdf['Ydisk'] = 0.5
+    sdf['Ybul'] = 0.7
+    sdf['Source'] = 'SPARC'
+    
+    # project the rotmass values onto it
+    rdf = rar_df(directory=DIR)
+    mass_cols = ['Ydisk', 'e_Ydisk', 'Ybul', 'e_Ybul']
+    rdf = rdf[standard_cols+mass_cols].copy()
+    rdf['Source'] = 'RAR'
+    
+    return pd.concat([sdf, rdf], sort=False, ignore_index=True)
+
