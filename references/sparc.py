@@ -27,7 +27,7 @@ def df_multi(uids, filename_str, ignore, labels, header):
         filename = filename_str % uid
         try:
             df = df_single(filename, labels, header)
-            df['ID'] = uid
+            df['Galaxy'] = uid
             collection[uid] = df
         except FileNotFoundError:
             if ignore:
@@ -40,7 +40,7 @@ def df_multi(uids, filename_str, ignore, labels, header):
 def massmodels_df(directory=DIR):
     """ Returns the Table2 mass models file as df """
     return df_single('%sMassModels_Lelli2016c.txt' % directory,\
-                    "ID,D,R,Vobs,e_Vobs,Vgas,Vdisk,Vbul,SBdisk,SBbul", 25)
+                    "Galaxy,D,R,Vobs,e_Vobs,Vgas,Vdisk,Vbul,SBdisk,SBbul", 25)
 
 def sparc_df(directory=DIR):
     """ Returns the sparc Table1 reference table """
@@ -73,8 +73,11 @@ def adjustment_df(directory=DIR):
     sdf = sparc_df(directory=DIR)
     standard_cols = ['Inc', 'e_Inc', 'D', 'e_D', 'Galaxy']
     sdf = sdf[standard_cols+['f_D',]].copy()
+    astro_scatter = 10**0.1 # from Li's rar paper
     sdf['Ydisk'] = 0.5
+    sdf['e_Ydisk'] = astro_scatter
     sdf['Ybul'] = 0.7
+    sdf['e_Ybul'] = astro_scatter
     sdf['Source'] = 'SPARC'
     
     # project the rotmass values onto it

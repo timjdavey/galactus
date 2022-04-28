@@ -37,7 +37,7 @@ def generate_profiles():
             rar_df = rar_df.query('Galaxy=="%s"' % uid),
             decomps_df = decomps[uid],
             rotmass_df = rt[uid],
-            mm_df = mm_df.query('ID=="%s"' % uid),
+            mm_df = mm_df.query('Galaxy=="%s"' % uid),
         )
     return profiles
 
