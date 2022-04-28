@@ -78,9 +78,9 @@ class SparcMassProfile:
         self.rotmass_dict = df2dict(rotmass_df)
         self.mm_dict = df2dict(mm_df)
 
-        self.auto_fit = auto_fit
-        self.extend_decomp = extend_decomp
         self.inc_used = None
+        self.auto_fit = True
+        self.extend_decomp = extend_decomp
 
 
     @property
@@ -103,25 +103,60 @@ class SparcMassProfile:
     def _decomps(self):
         """ Decomposition data """
 
+        data = {}
+        self.inc_used = {}
 
         # automatically fit decomposition profile
         # to the pre-decomposed points in the mass model
         # this to be updated when find out what the actual is
-        if self.auto_fit:
-            def interop(xdata, deg):
-                return np.interp(xdata,
-                    self.decomps_dict['R'],
-                    self.decomps_dict['SBdisk'])*cos(deg)
+        fit_components = ['disk', 'bul'] if self.is_bul else ['disk',]
+        for comp in fit_components:
+
+            if self.auto_fit:
+                def interop(xdata, deg):
+                    return np.interp(xdata,
+                        self.decomps_dict['R'],
+                        (self.decomps_dict['SB%s' % comp])*cos(deg))
+                
+                inc = sp.optimize.curve_fit(interop, self.mm_dict['R'],
+                            self.mm_dict['SB%s' % comp],
+                            p0=self.rar_dict['Inc'],
+                            bounds=[0,90])[0][0]
+                
+            else:
+                inc = self.sparc_dict['Inc']
+
+            self.inc_used[comp] = inc
+            err = self.sparc_dict['e_Inc']
+            adjs = [cos(inc), cos(inc+err), cos(inc-err)]
             
-            bounds = [0,90]
-            inc = sp.optimize.curve_fit(interop, self.mm_dict['R'],
-                        self.mm_dict['SBdisk'], bounds=bounds)[0][0]
-        else:
-            inc = self.sparc_dict['Inc']
+            R = list(self.decomps_dict['R'])
+            profile = list(self.decomps_dict['SB%s' % comp])
+    
+            # make sure the data tampers to zero
+            # otherwise nulled will have a harsh cusp
+            if self.extend_decomp:
+                R.append(R[-1]*2)
+                profile.append(0)
+    
+            data[comp] = (R, [np.array(profile)*a for a in adjs])
         
+        # gas
+        # using rotmass data, rather than decomp data
+        # has already been deprojected
+        R = list(self.rotmass_dict['R'])
+        gas = list(self.rotmass_dict['SBgas'])
+
+        if self.extend_decomp:
+            R.append(R[-1]*2)
+            gas.append(0)
+
+        data['gas'] = (R, [gas,])
+        
+        return data
+
 
         # run the rest
-        self.inc_used = inc
         err = self.sparc_dict['e_Inc']
         adjs = [cos(inc), cos(inc+err), cos(inc-err)]
         
@@ -206,5 +241,5 @@ class SparcMassProfile:
             if len(data) > 1:
                 g.fill_between(r, data[1], data[2], alpha=0.1, color=color)
         
-        g.set(title="%s. %s inc:%sdeg rar:%sdeg" % (index, self.uid, self.inc_used, self.rar_dict['Inc']))
+        g.set(title="%s. %s sparc:%s, rar:%s, used:%s" % (index, self.uid, self.sparc_dict['Inc'], self.rar_dict['Inc'], self.inc_used))
         

@@ -22,7 +22,7 @@ def load(filename, directory=DIR, masses=True):
     return sim
 
 
-def load_sparc(uids=None, directory=DIR, ignore=True):
+def load_sparc(uids=None, directory=DIR, ignore=True, namespace='sparc'):
     """
     Loads sparc simulations for a given set of galaxy ids
     Reassigns the profiles to refresh them just in case
@@ -34,7 +34,7 @@ def load_sparc(uids=None, directory=DIR, ignore=True):
     simulations = {}
     for uid, prof in profiles.items():
         try:
-            with open("%ssparc_%s.pickle" % (directory,uid), 'rb') as f:
+            with open("%s%s_%s.pickle" % (directory,namespace,uid), 'rb') as f:
                 sim = pickle.load(f)
                 sim.profile = prof
                 simulations[uid] = sim

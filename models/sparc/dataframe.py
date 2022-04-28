@@ -12,10 +12,6 @@ def augment_df(sim, mrs=None, distance=None, inclination=None):
     # append sparc table1 interesting parameters
     for k in ('D', 'e_D', 'Inc', 'e_Inc', 'Vflat', 'e_Vflat', 'Q', 'MHI', 'L[3.6]'):
         df[k] = sim.profile.sparc_dict[k]
-    
-    # additional calculations based on that data
-    df['rel_R'] = df['R']/df['R'].max()
-    df['mhi_R'] = df['R']/df['MHI']
 
     # with mass ratios from sparc paper by default
     # https://arxiv.org/pdf/1606.09251.pdf eq.2
@@ -31,8 +27,14 @@ def augment_df(sim, mrs=None, distance=None, inclination=None):
         R = R*dist_adjust
         for c in sim.mass_labels:
             df['V%s' % c] = df['V%s' % c]*(dist_adjust**0.5)
+        
+        # update original sparc values to newly supplied versions
+        df['R'] = R
+        df['D'] = distance
+    
     if inclination is not None:
         df['Vobs'] = df['Vobs']*sin(df['Inc'])/sin(inclination)
+        df['Inc'] = inclination
 
     # calculate additional added needed for benchmarking rar
     df['Vbar'] = np.sum([mrs[c]*df["V%s" % c]**2 for c in sim.mass_labels],axis=0)**0.5
@@ -57,6 +59,10 @@ def augment_df(sim, mrs=None, distance=None, inclination=None):
     # benchmark log bars, so can filter data
     # for a certain quality threshold
     df['VWdiff'] = np.abs(df['log_Vgbar']-df['log_Wgbar'])
+
+    # additional helper variables
+    df['rel_R'] = df['R']/df['R'].max()
+    df['mhi_R'] = df['R']/df['MHI']
 
     return df
 
