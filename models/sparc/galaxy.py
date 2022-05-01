@@ -3,7 +3,7 @@ from models.galaxy import Galaxy
 
 
 def generate_galaxy(profile, space_points=5000, calc_points=20,
-        rotmass_points=False, combine_masses=False, cp=None):
+        rotmass_points=False, cp=None):
     """
     Generates a sparc galaxy given a profile
     """
@@ -14,9 +14,6 @@ def generate_galaxy(profile, space_points=5000, calc_points=20,
     sim = Galaxy(masses, space, mass_labels=labels, cp=cp)
     sim.profile = profile
     sim.name = uid
-
-    if combine_masses:
-        sim.combine_masses()
     
     if rotmass_points:
         sim.analyse(profile.rotmass_points(space))

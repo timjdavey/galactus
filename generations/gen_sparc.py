@@ -17,23 +17,21 @@ def generate_sparc_simulation_worker(arguments):
     print("Creating\t%s. %s" % (i, uid))
 
     sim = generate_galaxy(prof,
-        space_points=2000,
-        calc_points=20,
-        rotmass_points=True,
-        combine_masses=False)
+        space_points=8000,
+        calc_points=10,
+        rotmass_points=True)
     
-    #print("Generate\t%s. %s using %s" % (i, uid, memory_usage()))
     sim.profile = None # is assigned on load
-    sim.save("sparc_simple_%s" % uid, masses=False)
+    sim.save("sparc_%s" % uid, masses=False)
     del prof
     del sim
-    
+
     print("Saved\t\t%s. %s" % (i, uid))
 
 
 
 if __name__ == '__main__':
-    pools = 8
+    pools = 1
     profiles = generate_profiles()
 
     with Pool(processes=pools) as pool:

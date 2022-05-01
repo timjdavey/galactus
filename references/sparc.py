@@ -75,9 +75,9 @@ def adjustment_df(directory=DIR):
     sdf = sdf[standard_cols+['f_D',]].copy()
     astro_scatter = 10**0.1 # from Li's rar paper
     sdf['Ydisk'] = 0.5
-    sdf['e_Ydisk'] = astro_scatter
+    sdf['e_Ydisk'] = 0.5*astro_scatter
     sdf['Ybul'] = 0.7
-    sdf['e_Ybul'] = astro_scatter
+    sdf['e_Ybul'] = 0.7*astro_scatter
     sdf['Source'] = 'SPARC'
     
     # project the rotmass values onto it

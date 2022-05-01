@@ -8,27 +8,27 @@ from models.sparc.dataframe import augment_df
 from models.load import load_sparc
 
 
-SPARC_THRESHOLD = 'VWdiff<0.1'
-# should automatically catch
-# Vbul==0.0 (only where there is no bul)
-# and rel_R > 0.1 + rel_R < 0.9 where we had accuracy issues
+threshold_label = 'Threshold'
 
-QUERIES = {
+DEBUG = {
     'Everything': 'R>0',
-    'Thresholded': SPARC_THRESHOLD,
+    threshold_label: 'VWdiffabs<%s',
     'Quality': 'Q<3 & Inc<80 & Inc>20',
-    'Quality Thresholded': '%s & Q<3 & Inc<80 & Inc>20' % SPARC_THRESHOLD,
+    'Quality_%s' % threshold_label: 'VWdiffabs<%s & Q<3 & Inc<80 & Inc>20',
+    'Anti_%s' % threshold_label: 'VWdiffabs>%s',
 }
 
-QUALTIY = QUERIES.copy()
-del QUALTIY['Everything']
+ANALYSIS = {}
+ANALYSIS[threshold_label] = DEBUG[threshold_label]
+ANALYSIS['Quality_%s' % threshold_label] = DEBUG['Quality_%s' % threshold_label]
+
 
 class Result:
     """
     Wrapper class to do basic analysis on the whole SPARC set of results.
     """
 
-    def __init__(self, queries=QUERIES, idens=('V','W'), adjustments=None, simulations=None):
+    def __init__(self, queries_strs=DEBUG, threshold=0.1, idens=('V','W'), adjustments=None, simulations=None):
         
         # load all that it can find
         if simulations is None:
@@ -51,10 +51,17 @@ class Result:
 
         self.dataframe = pd.concat(dfs, ignore_index=True)
         self.simulations = simulations
-        self.queries = queries
+        self.queries_strs = queries_strs
+        self.threshold = threshold
         self.idens = idens
         self.adjustments = adjustments
 
+    @property
+    def queries(self):
+        quer = {}
+        for k,v in self.queries_strs.items():
+            quer[k] = v % self.threshold if threshold_label in k else v
+        return quer
 
     def datasets(self):
         """
@@ -79,12 +86,34 @@ class Result:
         Plots a histogram of the differences in V (sparc model) & W (simulated model)
         """
         datasets = self.datasets()
+
+        # first plot the histograms
         fig, axes = plt.subplots(1, len(datasets), sharey=True, figsize=(20,5))
 
         for i, name in enumerate(datasets.keys()):
             df = datasets[name]
-            g = sns.histplot(df['log_Vgbar']-df['log_Wgbar'], ax=axes[i])
+            g = sns.histplot(df['VWdiff'], ax=axes[i])
             g.set(title=name)
+
+        # next plot the histograms
+        fig, axes = plt.subplots(1, len(datasets), sharex=True, sharey=True, figsize=(20,5))
+
+        for i, name in enumerate(datasets.keys()):
+            # then plot scatter residuals
+            df = datasets[name]
+            h = sns.scatterplot(data=df, x='rel_R', y='VWdiff',
+                s=2, hue='MHI', palette='icefire', ax=axes[i])
+            h.axhline(y=0, color='black', linestyle='dashed')
+
+        # then plot the CDF for picking the right level
+        fig, axes = plt.subplots(1, 1, figsize=(20,5))
+        dfs = []
+        for label, df in datasets.items():
+            df = df[['VWdiffabs']].copy()
+            df['set'] = label
+            dfs.append(df)
+        
+        sns.ecdfplot(data=pd.concat(dfs, ignore_index=True), x='VWdiffabs', hue='set', linestyle='dotted', ax=axes)
 
 
     def plot_rar(self, kind=0, idens=None, line=[1,6]):
@@ -123,7 +152,7 @@ class Result:
                 # rel_R coloured scatter
                 elif kind == 1:
                     g = sns.scatterplot(data=df, x=x, y=y,
-                        alpha=0.2, hue='rel_R', palette='Spectral', ax=ax)
+                        alpha=0.2, s=10, hue='rel_R', palette='Spectral', ax=ax)
 
                 # regression
                 elif kind == 2:

@@ -140,6 +140,7 @@ class Simulation:
             return df
 
     def mass_ratios(self, speak=False):
+        # TODO: move this to Sersic model
         ratios = {}
         msg = []
         for i, mass in enumerate(self.mass_sums):
