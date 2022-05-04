@@ -3,6 +3,7 @@ sys.path.append("../")
 
 from models.space import Space
 from models.galaxy import Galaxy
+from models.sparc.galaxy import plot_sim
 from models.equations import cos
 from references import sparc as sparc_imports
 
@@ -208,27 +209,35 @@ class SparcMassProfile:
         for R, comp in dc.values():
             # interp raw sparc data
             # that data doesn't smooth
-            masses.append(np.interp(r, R, comp[0])*scale)
+            masses.append(np.interp(r, R, comp[0])*scale)# left=0, right=0
             
         return np.array(masses), list(dc.keys())
     
-    def rotmass_points(self, space):
+    def rotmass_x(self, space):
+        points = []
+        c = space.center
+        R = self.rotmass_dict['R']
+        s = space.scale
+        return np.array([c[2]+i for i in np.floor(R/s).astype(int)])
+
+    def rotmass_points(self, space, left=False, right=True):
         """ Returns the points to be analysed
         to give the most accurate interp values
         for the given set of rotmass or mass model 'R's
         """
         points = []
-        c = space.center
-        for i in np.floor(self.rotmass_dict['R']/space.scale).astype(int):
-            points.append((c[0],c[1],c[2]+i))
-            points.append((c[0],c[1],c[2]+i+1))
+        for x in self.rotmass_x(space):
+            if left: points.append((c[0],c[1],x))
+            if right: points.append((c[0],c[1],x+1))
         return points
 
-
-    def plot(self, ax=None, index=0):
+    def plot(self, axes=None, index=0, sim=None):
         """ Plots the profile """
         dc = self._decomps()
         
+        # if only a standard plot
+        ax = axes[0] if sim else axes
+
         i = 0
         for label, comp in dc.items():
             r, data = comp
@@ -241,5 +250,12 @@ class SparcMassProfile:
             if len(data) > 1:
                 g.fill_between(r, data[1], data[2], alpha=0.1, color=color)
         
-        g.set(title="%s. %s sparc:%s, rar:%s, used:%s" % (index, self.uid, self.sparc_dict['Inc'], self.rar_dict['Inc'], self.inc_used))
-        
+        g.set(title="%s. %s" % (index, self.uid))
+
+        if sim:
+            plot_sim(sim.dataframe(), axes[1])
+
+
+
+
+

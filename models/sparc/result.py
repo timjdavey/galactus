@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 
 from models.sparc.dataframe import augment_df
 from models.load import load_sparc
-
+from models.sparc.galaxy import plot_sim
 
 threshold_label = 'Threshold'
 
@@ -28,7 +28,8 @@ class Result:
     Wrapper class to do basic analysis on the whole SPARC set of results.
     """
 
-    def __init__(self, queries_strs=DEBUG, threshold=0.1, idens=('V','W'), adjustments=None, simulations=None):
+    def __init__(self, adjustments=None, queries_strs=DEBUG,
+                threshold=0.1, idens=('V','W'), simulations=None, full_interp=False):
         
         # load all that it can find
         if simulations is None:
@@ -37,17 +38,17 @@ class Result:
         dfs = []
         for name, sim in simulations.items():
             if adjustments is None:
-                dfs.append(augment_df(sim))
+                dfs.append(augment_df(sim, full_interp=full_interp))
             else:
                 gdf = adjustments.query("Galaxy=='%s'" % name)
-                dfs.append(augment_df(sim,
-                    mrs={
-                        'disk': gdf.Ydisk.values[0],
-                        'bul': gdf.Ybul.values[0],
-                        'gas': 1.0,
-                    },
-                    distance=gdf.D.values[0],
-                    inclination=gdf.Inc.values[0]))
+
+                # if the galaxy isn't present in adjustments
+                # because adjustments is from a trained MCMC
+                # from a filtered dataset
+                # would need to go back and retain on
+                # set with global values of gamma, alpha etc
+                if len(gdf) > 0:
+                    dfs.append(augment_df(sim, gdf, full_interp=full_interp))
 
         self.dataframe = pd.concat(dfs, ignore_index=True)
         self.simulations = simulations
@@ -152,7 +153,7 @@ class Result:
                 # rel_R coloured scatter
                 elif kind == 1:
                     g = sns.scatterplot(data=df, x=x, y=y,
-                        alpha=0.2, s=10, hue='rel_R', palette='Spectral', ax=ax)
+                        alpha=1.0, s=3, hue='rel_R', palette='Spectral', ax=ax)
 
                 # regression
                 elif kind == 2:
@@ -232,3 +233,29 @@ class Result:
             
         return pd.DataFrame(data)
 
+
+    def plot_velocities(self, compare=None, count=None):
+        from models.sparc.profile import COLOR_SCHEME
+    
+        for i, group in enumerate(self.dataframe.groupby('Galaxy')):
+            galaxy, gdf = group
+            fig, axes = plt.subplots(1, 2 if compare else 1,figsize=(20,8), sharex=True, sharey=True)
+            
+            if compare is None:
+                g = plot_sim(gdf, axes, self.idens)
+            else:
+                # plot comparison thing on the left
+                # as you'll want sparc as a the comparison
+                # as it's a superset
+                # however, it's nearly always easier to
+                # original on the left
+                # reading to the changes on the right
+                # time passes left to right mentally
+                plot_sim(compare.dataframe[compare.dataframe['Galaxy']==galaxy], axes[0], compare.idens)
+                g = plot_sim(gdf, axes[1], self.idens)
+            
+            g.set(title=galaxy)
+            
+            if count and i == count-2: return
+    
+    

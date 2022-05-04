@@ -4,8 +4,7 @@ import numpy as np
 from models.equations import velocity, sin, null_gravity, combined_force
 
 
-def augment_df(sim, mrs=None, distance=None, inclination=None):
-    
+def augment_df(sim, adf=None, full_interp=False):
     # use rotmass as base df
     df = sim.profile.rotmass_df.copy()
 
@@ -15,12 +14,36 @@ def augment_df(sim, mrs=None, distance=None, inclination=None):
 
     # with mass ratios from sparc paper by defaultadjustment
     # https://arxiv.org/pdf/1606.09251.pdf eq.2
-    if mrs is None:
-        mrs = {'disk': 0.5, 'gas': 1.0, 'bul': 0.7}
+    mrs = {'disk': 0.5, 'gas': 1.0, 'bul': 0.7}
+
+    # then override params
+    distance, inclination = None, None
+    if adf is not None:
+        # handle defaults
+        if 'Ydisk' in adf:
+            mrs={
+                'disk': adf.Ydisk.values[0],
+                'bul': adf.Ybul.values[0],
+                'gas': 1.0,
+            }
+        if 'D' in adf:
+            distance = adf.D.values[0]
+        if 'Inc' in adf:
+            inclination = adf.Inc.values[0]
+
+    # store Y's
+    for key, value in mrs.items():
+        df['Y%s' % key] = value
+        ekey = 'e_Y%s' % key
+        if adf is not None and ekey in adf:
+            df[ekey] = adf[ekey].values[0]
+        else:
+            df[ekey] = value*10**0.1
 
     # make distance and inclination adjustments
     # from equations 4 & 5 in
     # https://www.aanda.org/articles/aa/pdf/2018/07/aa32547-17.pdf
+    R_orig = df['R']
     R = df['R']
     if distance is not None:
         dist_adjust = distance/sim.profile.sparc_dict['D']
@@ -49,10 +72,18 @@ def augment_df(sim, mrs=None, distance=None, inclination=None):
     # so can use raw component data in mcmc
     sdf = sim.dataframe(mass_ratios=False)
     for label in sim.mass_labels:
-        cdf = sdf.query('component=="%s"' % label)
-        df['Fnewton_%s' % label] = np.interp(R, cdf['rd'], cdf['x_vec'])
-        df['Fabs_%s' % label] = np.interp(R, cdf['rd'], cdf['x_abs'])
+        if full_interp:
+            cdf = sdf.query('component=="%s"' % label)
+            df['Fnewton_%s' % label] = np.interp(R_orig, cdf['rd'], cdf['x_vec'])
+            df['Fabs_%s' % label] = np.interp(R_orig, cdf['rd'], cdf['x_abs'])
+        else:
+            x_right_points = sim.profile.rotmass_x(sim.space)+1
+            cdf = sdf[(sdf['component']==label) & (sdf['x'].isin(x_right_points))]
+            df['Fnewton_%s' % label] = cdf['x_vec'].to_numpy()
+            df['Fabs_%s' % label] = cdf['x_abs'].to_numpy()
+
         df['Fnulled_%s' % label] = df['Fabs_%s' % label]-df['Fnewton_%s' % label]
+        df['W%s' % label] = velocity(R, df['Fnewton_%s' % label])
 
     # combine components
     df['Fnewton'] = combined_force(df, 'Fnewton', sim.mass_labels, mrs)
@@ -65,7 +96,7 @@ def augment_df(sim, mrs=None, distance=None, inclination=None):
     
     # benchmark log bars, so can filter data
     # for a certain quality threshold
-    df['VWdiff'] = (df['Vgbar']/df['Wgbar'])-1
+    df['VWdiff'] = (df['Wgbar']/df['Vgbar'])-1
     df['VWdiffabs'] = np.abs(df['VWdiff'])
 
     # additional helper variables

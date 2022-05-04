@@ -61,10 +61,19 @@ class Space:
     def radius(self):
         return self.points[1]*self.scale/2
     
-    def rz(self):
+    def rz(self, offset=0.0):
+        """
+        Returns the matrixes for R & Z, to use as mass indicies
+
+        :offset: allows you to make sure the masses obtained 
+        for n to n+1 aren't set at the density of n,
+        instead you can offset so they are set at the density of
+        n+offset (e.g. half way between n and n+1).
+        """
         indices = np.indices(self.points)
         z = np.abs(indices[0] - self.center[0])*self.scale
         
         deltas = np.array([(indices[i+1]-c)*self.scale for i, c in enumerate(self.center[1:])])
         r = np.sum(deltas**2, axis=0)**0.5
+        r += offset*self.scale
         return r, z
