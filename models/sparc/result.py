@@ -4,9 +4,9 @@ import seaborn as sns
 import scipy as sp
 import matplotlib.pyplot as plt
 
-from models.sparc.dataframe import augment_df
 from models.load import load_sparc
-from models.sparc.galaxy import plot_sim
+from models.sparc.dataframe import augment_df
+from models.sparc.profile import COLOR_SCHEME
 
 threshold_label = 'Threshold'
 
@@ -234,28 +234,50 @@ class Result:
         return pd.DataFrame(data)
 
 
-    def plot_velocities(self, compare=None, count=None):
-        from models.sparc.profile import COLOR_SCHEME
-    
+    def plot_velocities(self, compare=None, count=None, profiles=False, sharex=True):
+
+        def plot_sim(df, ax, idens=('V', 'W')):
+           for key, color in COLOR_SCHEME.items():
+               g = sns.scatterplot(data=df, x='R', y='V%s' % key, ax=ax, color=color, label='V%s' % key)
+               if key == 'obs':
+                   g.errorbar(df['R'], df['Vobs'], yerr=df['e_Vobs'], ecolor=color, fmt='.k')
+                   sns.scatterplot(data=df, x='R', y='Vbar', ax=ax, color='grey', label='Vbar')
+                   sns.lineplot(data=df, x='R', y='Wbar', ax=ax, color='grey', label='Wbar')
+                   if 'Tbar' in df:
+                       sns.lineplot(data=df, x='R', y='Tbar', ax=ax, color=color, label='Tbar')
+               else:
+                   sns.lineplot(data=df, x='R', y='W%s' % key, ax=ax, color=color, label='W%s' % key)
+           return g
+
+        # how many plots
+        sharey = True
+        columns = 1
+        if compare: columns += 1
+        if profiles:
+            columns += 1
+            sharey = False
+
         for i, group in enumerate(self.dataframe.groupby('Galaxy')):
             galaxy, gdf = group
-            fig, axes = plt.subplots(1, 2 if compare else 1,figsize=(20,8), sharex=True, sharey=True)
+            fig, axes = plt.subplots(1, columns, figsize=(20,8), sharex=sharex, sharey=sharey)
             
-            if compare is None:
+            if columns == 1:
                 g = plot_sim(gdf, axes, self.idens)
-            else:
-                # plot comparison thing on the left
-                # as you'll want sparc as a the comparison
-                # as it's a superset
-                # however, it's nearly always easier to
-                # original on the left
-                # reading to the changes on the right
-                # time passes left to right mentally
-                plot_sim(compare.dataframe[compare.dataframe['Galaxy']==galaxy], axes[0], compare.idens)
-                g = plot_sim(gdf, axes[1], self.idens)
+
+            if compare or profiles:
+                # plot this result object on the right
+                # as it's the last most thing in the
+                # analysis chain
+                g = plot_sim(gdf, axes[columns-1], self.idens)
+
+                j = 0
+                if compare:
+                    plot_sim(compare.dataframe[compare.dataframe['Galaxy']==galaxy], axes[columns-2], compare.idens)
+                if profiles:
+                    self.simulations[galaxy].profile.plot(axes[0], i)
             
             g.set(title=galaxy)
             
-            if count and i == count-2: return
+            if count and i == count-1: return
     
     

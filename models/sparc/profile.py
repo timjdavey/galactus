@@ -3,7 +3,6 @@ sys.path.append("../")
 
 from models.space import Space
 from models.galaxy import Galaxy
-from models.sparc.galaxy import plot_sim
 from models.equations import cos
 from references import sparc as sparc_imports
 
@@ -52,7 +51,6 @@ def dfrowdict(df):
 
 
 COLOR_SCHEME = {'gas': 'teal', 'disk': 'darkorange', 'bul': 'mediumpurple', 'obs': 'black'}
-
 
 
 class SparcMassProfile:
@@ -231,29 +229,27 @@ class SparcMassProfile:
             if right: points.append((c[0],c[1],x+1))
         return points
 
-    def plot(self, axes=None, index=0, sim=None):
+    def plot(self, ax=None, index=0):
         """ Plots the profile """
         dc = self._decomps()
-        
-        # if only a standard plot
-        ax = axes[0] if sim else axes
+        rot_df = self.rotmass_df
 
         i = 0
         for label, comp in dc.items():
-            r, data = comp
             color = COLOR_SCHEME[label]
             i += 1
             
-            sns.scatterplot(data=self.rotmass_df, x='R', y='SB%s' % label, color=color, ax=ax, label="Rotmass")
+            # reference points
+            sns.scatterplot(data=rot_df, x='R', y='SB%s' % label, color=color, ax=ax, label="Rotmass")
             
+            # decomp data
+            r, data = comp
             g = sns.lineplot(x=r, y=data[0], color=color, ax=ax, label=label)
             if len(data) > 1:
                 g.fill_between(r, data[1], data[2], alpha=0.1, color=color)
         
         g.set(title="%s. %s" % (index, self.uid))
 
-        if sim:
-            plot_sim(sim.dataframe(), axes[1])
 
 
 
