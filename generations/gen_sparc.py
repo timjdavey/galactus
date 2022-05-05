@@ -14,25 +14,23 @@ from multiprocessing import Pool
 def generate_sparc_simulation_worker(arguments):
     i, prof = arguments
     uid = prof.uid
-    if uid in ['UGC11914', 'NGC7793', 'NGC2403', 'NGC0024', 'NGC3521', 'UGC09133', 'NGC5585', 'NGC5005', 'UGC04278', 'UGC01281']:
-        print("Creating\t%s. %s" % (i, uid))
     
-        sim = generate_galaxy(prof,
-            space_points=6000,
-            calc_points=10,
-            rotmass_points=True)
-        
-        sim.profile = None # is assigned on load
-        sim.save("donut_sparc_%s" % uid, masses=False)
-        del prof
-        del sim
+    sim = generate_galaxy(prof,
+        space_points=6000,
+        calc_points=20,
+        rotmass_points=False)
     
-        print("Saved\t\t%s. %s" % (i, uid))
+    sim.profile = None # is assigned on load
+    sim.save("sparcapprox_%s" % uid, masses=False)
+    del prof
+    del sim
+    
+    print("Saved\t\t%s. %s" % (i, uid))
 
 
 
 if __name__ == '__main__':
-    pools = 2
+    pools = 8
     profiles = generate_profiles()
 
     with Pool(processes=pools) as pool:

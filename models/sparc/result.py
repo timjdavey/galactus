@@ -71,17 +71,6 @@ class Result:
         """
         return dict([(k, self.dataframe.query(q)) for k, q in self.queries.items()])
 
-
-    def apply_gT(self, iden='T'):
-        """
-        Calculates the g values for a given set of Tbar's
-        (null adjusted Velocity calculations)
-        """
-        key = '%sgbar' % iden
-        self.dataframe[key] = self.dataframe['%sbar' % iden]**2/R
-        self.dataframe['log_%s' % key] = np.log10(self.dataframe[key])
-
-
     def plot_thresholds(self):
         """
         Plots a histogram of the differences in V (sparc model) & W (simulated model)
@@ -117,7 +106,7 @@ class Result:
         sns.ecdfplot(data=pd.concat(dfs, ignore_index=True), x='VWdiffabs', hue='set', linestyle='dotted', ax=axes)
 
 
-    def plot_rar(self, kind=0, idens=None, line=[1,6]):
+    def plot_rar(self, kind=0, idens=None, query_key=None, line=[1,6]):
         """
         Plots various 
         kind == 0 is density plot
@@ -125,24 +114,31 @@ class Result:
         kind == 2 is a regression plot
         """
         datasets = self.datasets()
+        datakeys = [query_key,] if query_key else datasets.keys()
         if idens is None: idens = self.idens
 
-        height = len(datasets)
+        height = len(datakeys)
         width = len(idens)
         fig, axes = plt.subplots(height, width, sharex=True, sharey=True, figsize=(20,10*height))
 
         # plot filter queries on each row
-        for row, name in enumerate(datasets.keys()):
+        for row, name in enumerate(datakeys):
             df = datasets[name]
+            axrow = axes[row] if height > 1 else axes
 
             # plot references on each column
             for col, iden in enumerate(idens):
-                ax = axes[row][col]
+                ax = axrow[col]
                 x = 'log_%sgbar' % iden
                 y = 'log_gobs'
 
-                # density
+                 # rel_R coloured scatter
                 if kind == 0:
+                    g = sns.scatterplot(data=df, x=x, y=y,
+                        alpha=1.0, s=3, hue='rel_R', palette='Spectral', ax=ax)
+
+                # density
+                elif kind == 1:
                     g = sns.scatterplot(data=df, x=x, y=y,
                         color='black', s=10, alpha=0.5, ax=ax)
                     sns.histplot(data=df, x=x, y=y,
@@ -150,11 +146,6 @@ class Result:
                     sns.kdeplot(data=df, x=x, y=y,
                         levels=4, color="w", linewidths=2, ax=ax)
                 
-                # rel_R coloured scatter
-                elif kind == 1:
-                    g = sns.scatterplot(data=df, x=x, y=y,
-                        alpha=1.0, s=3, hue='rel_R', palette='Spectral', ax=ax)
-
                 # regression
                 elif kind == 2:
                     g = sns.regplot(data=df, x=x, y=y, order=1, ax=ax, x_bins=10)
