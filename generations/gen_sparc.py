@@ -15,8 +15,10 @@ def generate_sparc_simulation_worker(arguments):
     i, prof = arguments
     uid = prof.uid
     
+    print("Create\t\t%s. %s" % (i, uid))
+
     sim = generate_galaxy(prof,
-        space_points=6000,
+        space_points=3000,
         calc_points=20,
         rotmass_points=False)
     

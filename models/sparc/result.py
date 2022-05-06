@@ -186,8 +186,18 @@ class Result:
 
 
     def plot_residuals(self, idens=None, query_key=None,
-            checks=('rel_R', 'Fnulled', 'mhi_R', 'R', 'D', 'MHI'), non_log=('rel_R',)):
+            checks=('rel_R', 'Fnulled', 'mhi_R', 'R', 'D', 'MHI'),
+            non_log=('rel_R',), sharey=True):
         """ Plots the residuals """
+
+        """
+        A good plot for Fnulled
+        plt.figure(figsize=(20,10))
+        df = found.datasets()['Everything']
+        sns.scatterplot(x=df['Fnulled'], y=df['gobs']/df['Tgbar'], hue=df['rel_R'], s=10,
+            palette='Spectral').set(xscale='log', yscale='log', xlim=(10**1,10**5), ylim=(10**-2, 10**2))
+        """
+
 
         # only makes sense to do for one query group
         # visually would get messy otherwise 
@@ -199,7 +209,7 @@ class Result:
 
         # return regression data
         data = []
-        fig, axes = plt.subplots(len(checks), len(idens), figsize=(20,10*len(checks)))
+        fig, axes = plt.subplots(len(checks), len(idens), sharey=sharey, figsize=(20,10*len(checks)))
         for col, iden in enumerate(idens):
             for row, c in enumerate(checks):
                 ax = axes[row][col]
@@ -207,12 +217,13 @@ class Result:
                 if c in non_log: x = df[c]
                 else: x = np.log10(df[c])
 
-                y = np.log10(df['gobs']/df['%sbar' % iden])
+                y = df['log_gobs']/df['log_%sgbar' % (iden)]
                 result = sp.stats.linregress(x, y)
                 sns.scatterplot(x=x, y=y, color='black', s=10, alpha=0.5, ax=ax)
                 sns.histplot(x=x, y=y, bins=30, pthresh=.05, cmap="mako_r", alpha=0.6, ax=ax)
                 sns.lineplot(x=x, y=result.slope*x+result.intercept, color='red', ax=ax)
                 ax.axhline(y=1, color='orange')
+                ax.set(ylabel='log(gobs)/log(%sgbar)' % iden)
                 data.append({
                     'iden': iden,
                     'check': c,

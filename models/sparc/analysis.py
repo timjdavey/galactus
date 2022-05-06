@@ -94,11 +94,11 @@ class Analysis:
         else:
             az.plot_posterior(self.trace, var_names=self.params_uni)
 
-    def Result(self, fast=False):
+    def Result(self, fast=False, *args, **kwargs):
         """ Generates a result object, using a fast MAP or default full sample """
 
         adjs, uni = self.params(fast)
-        result = Result(adjustments=adjs)
+        result = Result(adjustments=adjs, *args, **kwargs)
         
         # don't assume that there are universal params
         if uni:
