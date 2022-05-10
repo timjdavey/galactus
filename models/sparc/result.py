@@ -239,18 +239,19 @@ class Result:
     def plot_velocities(self, compare=None, count=None, profiles=False, sharex=True):
 
         def plot_sim(df, ax, idens=('V', 'W')):
-           for key, color in COLOR_SCHEME.items():
-               g = sns.scatterplot(data=df, x='R', y='V%s' % key, ax=ax, color=color, label='V%s' % key)
-               if key == 'obs':
-                   g.errorbar(df['R'], df['Vobs'], yerr=df['e_Vobs'], ecolor=color, fmt='.k')
-                   sns.scatterplot(data=df, x='R', y='Vbar', ax=ax, color='grey', label='Vbar')
-                   sns.lineplot(data=df, x='R', y='Wbar', ax=ax, color='grey', label='Wbar')
-                   if 'Tbar' in df:
-                       sns.lineplot(data=df, x='R', y='Tbar', ax=ax, color=color, label='Tbar')
-               else:
-                   sns.lineplot(data=df, x='R', y='W%s' % key, ax=ax, color=color, label='W%s' % key)
-           return g
-
+            for key, color in COLOR_SCHEME.items():
+                g = sns.scatterplot(data=df, x='R', y='V%s' % key, ax=ax, color=color, label='V%s' % key)
+                if key == 'obs':
+                    g.errorbar(df['R'], df['Vobs'], yerr=df['e_Vobs'], ecolor=color, fmt='.k')
+                    sns.scatterplot(data=df, x='R', y='Vbar', ax=ax, color='grey', label='Vbar')
+                    sns.lineplot(data=df, x='R', y='Wbar', ax=ax, color='grey', label='Wbar')
+                    if 'Tbar' in df:
+                        sns.lineplot(data=df, x='R', y='Tbar', ax=ax, color=color, label='Tbar')
+                else:
+                    if 'W%s' % key in df.columns:
+                        sns.lineplot(data=df, x='R', y='W%s' % key, ax=ax, color=color, label='W%s' % key)
+            return g
+ 
         # how many plots
         sharey = True
         columns = 1

@@ -87,6 +87,7 @@ def augment_df(sim, adf=None, full_interp=False):
 
     # combine components
     df['Fnewton'] = combined_force(df, 'Fnewton', sim.mass_labels, mrs)
+    df['Fabs'] = combined_force(df, 'Fabs', sim.mass_labels, mrs)
     df['Fnulled'] = combined_force(df, 'Fnulled', sim.mass_labels, mrs)
 
     # Wbar from Wgbar

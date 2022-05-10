@@ -127,7 +127,7 @@ class SparcMassProfile:
 
             self.inc_used[comp] = inc
             err = self.sparc_dict['e_Inc']
-            adjs = [cos(inc), cos(inc+err), cos(inc-err)]
+            adjs = cos(inc)
             
             R = list(self.decomps_dict['R'])
             profile = list(self.decomps_dict['SB%s' % comp])
@@ -138,7 +138,7 @@ class SparcMassProfile:
                 R.append(R[-1]*2)
                 profile.append(0)
     
-            data[comp] = (R, [np.array(profile)*a for a in adjs])
+            data[comp] = (R, np.array(profile)*adjs)
         
         # gas
         # using rotmass data, rather than decomp data
@@ -150,46 +150,7 @@ class SparcMassProfile:
             R.append(R[-1]*2)
             gas.append(0)
 
-        data['gas'] = (R, [gas,])
-        
-        return data
-
-
-        # run the rest
-        err = self.sparc_dict['e_Inc']
-        adjs = [cos(inc), cos(inc+err), cos(inc-err)]
-        
-        data = {}
-        
-        # disk
-        R = list(self.decomps_dict['R'])
-        disk = list(self.decomps_dict['SBdisk'])
-
-        # make sure the data tampers to zero
-        # otherwise nulled will have a harsh cusp
-        if self.extend_decomp:
-            R.append(R[-1]*2)
-            disk.append(0)
-
-        data['disk'] = (R, [np.array(disk)*a for a in adjs])
-        
-        # gas
-        # using rotmass data, rather than decomp data
-        # has already been deprojected
-        R = list(self.rotmass_dict['R'])
-        gas = list(self.rotmass_dict['SBgas'])
-
-        if self.extend_decomp:
-            R.append(R[-1]*2)
-            gas.append(0)
-
-        data['gas'] = (R, [gas,])
-        
-        # bulge
-        # TODO: bulge not handled well
-        # for analysis are avoiding for now
-        if self.is_bul:
-            data['bul'] = (self.decomps_dict['R'], [self.decomps_dict['SBbul']*a for a in adjs])
+        data['gas'] = (R, gas)
         
         return data
 
@@ -207,7 +168,7 @@ class SparcMassProfile:
         for R, comp in dc.values():
             # interp raw sparc data
             # that data doesn't smooth
-            masses.append(np.interp(r, R, comp[0])*scale)# left=0, right=0
+            masses.append(np.interp(r, R, comp)*scale)# left=0, right=0
             
         return np.array(masses), list(dc.keys())
     
@@ -224,6 +185,7 @@ class SparcMassProfile:
         for the given set of rotmass or mass model 'R's
         """
         points = []
+        c = space.center
         for x in self.rotmass_x(space):
             if left: points.append((c[0],c[1],x))
             if right: points.append((c[0],c[1],x+1))
@@ -235,7 +197,7 @@ class SparcMassProfile:
         rot_df = self.rotmass_df
 
         i = 0
-        for label, comp in dc.items():
+        for label, decomp in dc.items():
             color = COLOR_SCHEME[label]
             i += 1
             
@@ -243,10 +205,8 @@ class SparcMassProfile:
             sns.scatterplot(data=rot_df, x='R', y='SB%s' % label, color=color, ax=ax, label="Rotmass")
             
             # decomp data
-            r, data = comp
-            g = sns.lineplot(x=r, y=data[0], color=color, ax=ax, label=label)
-            if len(data) > 1:
-                g.fill_between(r, data[1], data[2], alpha=0.1, color=color)
+            r, data = decomp
+            g = sns.lineplot(x=r, y=data, color=color, ax=ax, label=label)
         
         g.set(title="%s. %s" % (index, self.uid))
 
