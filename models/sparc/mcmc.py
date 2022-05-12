@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 from models.equations import null_gravity
 
-def mcmc(df, velocity=False,
+def mcmc(df, velocity=True,
     train_null=True, train_epsilon=False, train_inc=False, train_y=False, train_tau=False):
     coords = {
         "Galaxy": df.Galaxy.unique(),
