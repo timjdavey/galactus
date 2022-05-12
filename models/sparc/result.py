@@ -12,15 +12,21 @@ threshold_label = 'Threshold'
 
 DEBUG = {
     'Everything': 'R>0',
-    threshold_label: 'VWdiffabs<%s',
+    threshold_label: 'VSdiffabs<%s',
     'Quality': 'Q<3 & Inc<80 & Inc>20',
-    'Quality_%s' % threshold_label: 'VWdiffabs<%s & Q<3 & Inc<80 & Inc>20',
-    'Anti_%s' % threshold_label: 'VWdiffabs>%s',
+    'Quality_%s' % threshold_label: 'VSdiffabs<%s & Q<3 & Inc<80 & Inc>20',
+    'Anti_%s' % threshold_label: 'VSdiffabs>%s',
 }
 
 ANALYSIS = {}
 ANALYSIS[threshold_label] = DEBUG[threshold_label]
 ANALYSIS['Quality_%s' % threshold_label] = DEBUG['Quality_%s' % threshold_label]
+
+IDENS = {
+    'V': 'Lelli',
+    'S': 'Baryonic', # Simulated from decomps
+    'P': 'Predicted', # Using adjusted values
+}
 
 
 class Result:
@@ -28,8 +34,8 @@ class Result:
     Wrapper class to do basic analysis on the whole SPARC set of results.
     """
 
-    def __init__(self, adjustments=None, queries_strs=DEBUG,
-                threshold=0.1, idens=('V','W'), simulations=None, full_interp=False):
+    def __init__(self, adjustments=None, queries_strs=DEBUG, iden_labels=IDENS,
+                threshold=0.1, idens=('V','S'), simulations=None, full_interp=False):
         
         # load all that it can find
         if simulations is None:
@@ -53,6 +59,7 @@ class Result:
         self.dataframe = pd.concat(dfs, ignore_index=True)
         self.simulations = simulations
         self.queries_strs = queries_strs
+        self.iden_labels = iden_labels
         self.threshold = threshold
         self.idens = idens
         self.adjustments = adjustments
@@ -64,12 +71,51 @@ class Result:
             quer[k] = v % self.threshold if threshold_label in k else v
         return quer
 
-    def datasets(self):
+    def datasets(self, df=None):
         """
         Automatically return the dataframe filtered
         using the `query` param
         """
-        return dict([(k, self.dataframe.query(q)) for k, q in self.queries.items()])
+        df = self.dataframe if df is None else df
+        return dict([(k, df.query(q)) for k, q in self.queries.items()])
+
+
+    def statistics(self, g_not_vel=True, query_key=None, iden=None, weight=False, residuals=True):
+        """
+        Returns a selection of key statistics about the 
+        """
+        from sklearn.metrics import r2_score,\
+            mean_absolute_error, mean_squared_error, mean_squared_log_error
+        df = self.dataframe.copy()
+        datasets = self.datasets()
+        if iden is None: iden = self.idens[-1]
+        datakeys = [query_key,] if query_key else datasets.keys()
+        observations = {
+            'little g': ('gobs', '%sgbar' % iden),
+            'velocity': ('Vobs', '%sbar' % iden),
+        }
+
+        data = []
+        for dk in datakeys:
+            df = datasets[dk]
+            for label, ys in observations.items():
+                y_true, y_pred = df[ys[0]], df[ys[1]]
+                weight = None
+                stats = {
+                    'dataset': dk,
+                    'observation': label,
+                    'r2': r2_score(y_true, y_pred, sample_weight=weight),
+                    'RMSE': mean_squared_error(y_true, y_pred, sample_weight=weight, squared=False),
+                    'MAE': mean_absolute_error(y_true, y_pred, sample_weight=weight),
+                    'MLSE': mean_squared_log_error(y_true, y_pred, sample_weight=weight)
+                }
+                if residuals:
+                    stats['Res(Log y)'] = self.residual(df, resid='%sgbar' % iden, iden=iden, plot=False).slope
+                    stats['Res(Log mhi_R)'] = self.residual(df, resid='mhi_R', iden=iden, plot=False).slope
+                    stats['Res(Log nulled)'] = self.residual(df, resid='Fnulled', iden=iden, plot=False).slope
+                
+                data.append(stats)
+        return pd.DataFrame(data=data)
 
     def plot_thresholds(self):
         """
@@ -106,7 +152,7 @@ class Result:
         sns.ecdfplot(data=pd.concat(dfs, ignore_index=True), x='VWdiffabs', hue='set', linestyle='dotted', ax=axes)
 
 
-    def plot_rar(self, kind=0, idens=None, query_key=None, line=[1,6]):
+    def plot_rar(self, kind=0, idens=None, query_key=None, title=None, line=[1,6], velocity=False):
         """
         Plots various 
         kind == 0 is density plot
@@ -129,39 +175,49 @@ class Result:
             # plot references on each column
             for col, iden in enumerate(idens):
                 ax = axrow[col]
-                x = 'log_%sgbar' % iden
-                y = 'log_gobs'
-
-                 # rel_R coloured scatter
+                if velocity:
+                    x, y = '%sbar' % iden, 'Vobs'
+                    lx, ly = np.log10(df[x]), np.log10(df[y])
+                    xlabel = 'Observed Velocity'
+                    ylabel = '%s Velocity' % self.iden_labels[iden]
+                else:
+                    x, y = '%sgbar' % iden, 'gobs'
+                    lx, ly = np.log10(df[x]), np.log10(df[y])
+                    xlabel = 'Log of Observed g'
+                    ylabel = 'Log of %s g' % self.iden_labels[iden]
+                
+                # rel_R coloured scatter
                 if kind == 0:
-                    g = sns.scatterplot(data=df, x=x, y=y,
+                    g = sns.scatterplot(data=df, x=lx, y=ly,
                         alpha=1.0, s=3, hue='rel_R', palette='Spectral', ax=ax)
-
+                    
                 # density
                 elif kind == 1:
-                    g = sns.scatterplot(data=df, x=x, y=y,
+                    g = sns.scatterplot(x=lx, y=ly,
                         color='black', s=10, alpha=0.5, ax=ax)
-                    sns.histplot(data=df, x=x, y=y,
+                    sns.histplot(x=lx, y=ly,
                         bins=30, pthresh=.01, cmap="mako_r", alpha=0.6, ax=ax)
-                    sns.kdeplot(data=df, x=x, y=y,
+                    sns.kdeplot(x=lx, y=ly,
                         levels=4, color="w", linewidths=2, ax=ax)
-                
-                # regression
+
+                # reg
                 elif kind == 2:
-                    g = sns.regplot(data=df, x=x, y=y, order=1, ax=ax, x_bins=10)
+                    g = sns.regplot(x=lx, y=ly, scatter=False, ax=ax)
 
-                else:
-                    raise ValueError("%s for kind is invalid" % kind)
-                
+                # cleaner density
+                elif kind == 1:
+                    g = sns.histplot(x=lx, y=ly,
+                        bins=30, pthresh=.01, cmap="Blues", alpha=0.6, ax=ax)
+                    
+                # title (dataset), reference line, labels
                 if col == 0:
-                    g.set(title=name)
-                
-                # reference line
+                    g.set(title=title if title else name)
+
                 sns.lineplot(x=line, y=line, color='grey', ax=ax, linestyle='dotted')
-
-
+                g.set(xlabel=xlabel, ylabel=ylabel)
+        
     def plot_rars(self, *args, **kwargs):
-        """ Plots all the rar plots """
+        """ Plots all the rar plots. Similar to a QQ plot """
 
         for i in range(3):
             self.plot_rar(kind=i, *args, **kwargs)
@@ -185,59 +241,43 @@ class Result:
                 bins=50, pthresh=.2, cmap="mako_r", alpha=0.6, ax=axes[i])
 
 
-    def plot_residuals(self, idens=None, query_key=None,
-            checks=('rel_R', 'Fnulled', 'mhi_R', 'R', 'D', 'MHI'),
-            non_log=('rel_R',), sharey=True):
-        """ Plots the residuals """
+    def plot_residuals(self, iden=None, query_key=None):
+        """ Plots residuals for given `iden` and `query_key` """
+        datasets = self.datasets()
+        if iden is None: iden = self.idens[-1]
+        datakeys = [query_key,] if query_key else datasets.keys()
+        fig, axes = plt.subplots(len(datakeys), 3, sharey=True, figsize=(20,5*len(datakeys)))
+        
+        for i, dk in enumerate(datakeys):
+            df = datasets[dk]
+            self.residual(df, iden=iden, resid='%sgbar' % iden, xlabel='Log(%s g)' % self.iden_labels[iden], ax=axes[i][0])
+            self.residual(df, iden=iden, resid='mhi_R', xlabel='Log(R/MHI)', ax=axes[i][1])
+            self.residual(df, iden=iden, resid='Fnulled', xlabel='Log(F nulled)', ax=axes[i][2])
 
-        """
-        A good plot for Fnulled
-        plt.figure(figsize=(20,10))
-        df = found.datasets()['Everything']
-        sns.scatterplot(x=df['Fnulled'], y=df['gobs']/df['Tgbar'], hue=df['rel_R'], s=10,
-            palette='Spectral').set(xscale='log', yscale='log', xlim=(10**1,10**5), ylim=(10**-2, 10**2))
-        """
+    def residual(self, df=None, resid='mhi_R', iden='V', ax=None, plot=True, **kwargs):
+        """ Plots a specific log residual """
+        if df is None: df = self.dataframe
+        
+        y = np.log10(df['gobs']) - np.log10(df['%sgbar' % iden])
+        x = np.log10(df[resid])
+        reg = sp.stats.linregress(x, y)
 
-
-        # only makes sense to do for one query group
-        # visually would get messy otherwise 
-        if query_key is None: query_key = list(self.queries.keys())[-1]
-        df = self.datasets()[query_key]
-
-        # it's likely you'll only want to plot for T
-        if idens is None: idens = self.idens
-
-        # return regression data
-        data = []
-        fig, axes = plt.subplots(len(checks), len(idens), sharey=sharey, figsize=(20,10*len(checks)))
-        for col, iden in enumerate(idens):
-            for row, c in enumerate(checks):
-                ax = axes[row][col]
-
-                if c in non_log: x = df[c]
-                else: x = np.log10(df[c])
-
-                y = df['log_gobs']/df['log_%sgbar' % (iden)]
-                result = sp.stats.linregress(x, y)
-                sns.scatterplot(x=x, y=y, color='black', s=10, alpha=0.5, ax=ax)
-                sns.histplot(x=x, y=y, bins=30, pthresh=.05, cmap="mako_r", alpha=0.6, ax=ax)
-                sns.lineplot(x=x, y=result.slope*x+result.intercept, color='red', ax=ax)
-                ax.axhline(y=1, color='orange')
-                ax.set(ylabel='log(gobs)/log(%sgbar)' % iden)
-                data.append({
-                    'iden': iden,
-                    'check': c,
-                    'r2': result.rvalue**2,
-                    'rslope': result.slope,
-                    'rstderr': result.stderr,
-                    'rintercept': result.intercept
-                })
-            
-        return pd.DataFrame(data)
+        if plot:
+            g = sns.histplot(x=x, y=y, bins=30, pthresh=.05, cmap="Blues", ax=ax)
+            sns.lineplot(x=x, y=reg.slope*x+reg.intercept, color='red', ax=ax)
+            g.axhline(y=0, color='grey', linestyle='dotted')
+            g.set(ylabel='Log(Observed g)-Log(%s g)' % self.iden_labels[iden], **kwargs)
+        return reg
 
 
     def plot_velocities(self, compare=None, count=None, profiles=False, sharex=True):
-
+        """
+        Plots the velocity graphs of individual galaxies.
+        :compare: takes another Result object to compare adj values against
+        :count: is total number to plot
+        :profiles: _False_ plots the profile graphs of each galaxy if _True_
+        :sharex: _True_ does what it says on the tin
+        """
         def plot_sim(df, ax, idens=('V', 'W')):
             for key, color in COLOR_SCHEME.items():
                 g = sns.scatterplot(data=df, x='R', y='V%s' % key, ax=ax, color=color, label='V%s' % key)

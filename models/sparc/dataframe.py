@@ -40,6 +40,10 @@ def augment_df(sim, adf=None, full_interp=False):
         else:
             df[ekey] = value*10**0.1
 
+    # Tau - add it as standard so can use it in all equation uses
+    tau_key = 'tau'
+    df[tau_key] = adf[tau_key].values[0] if adf is not None and tau_key in adf else 0
+
     # make distance and inclination adjustments
     # from equations 4 & 5 in
     # https://www.aanda.org/articles/aa/pdf/2018/07/aa32547-17.pdf
@@ -62,10 +66,7 @@ def augment_df(sim, adf=None, full_interp=False):
     # calculate additional added needed for benchmarking rar
     df['Vbar'] = np.sum([mrs[c]*df["V%s" % c]**2 for c in sim.mass_labels],axis=0)**0.5
     df['Vgbar'] = df['Vbar']**2/R
-    df['log_Vgbar'] = np.log10(df['Vgbar'])
-
     df['gobs'] = df['Vobs']**2/R
-    df['log_gobs'] = np.log10(df['gobs'])
 
     # interp force values from simulation
     # for now using unitary mass ratios
@@ -83,22 +84,23 @@ def augment_df(sim, adf=None, full_interp=False):
             df['Fabs_%s' % label] = cdf['x_abs'].to_numpy()
 
         df['Fnulled_%s' % label] = df['Fabs_%s' % label]-df['Fnewton_%s' % label]
-        df['W%s' % label] = velocity(R, df['Fnewton_%s' % label])
+        df['S%s' % label] = velocity(R, df['Fnewton_%s' % label])
 
     # combine components
     df['Fnewton'] = combined_force(df, 'Fnewton', sim.mass_labels, mrs)
     df['Fabs'] = combined_force(df, 'Fabs', sim.mass_labels, mrs)
     df['Fnulled'] = combined_force(df, 'Fnulled', sim.mass_labels, mrs)
 
-    # Wbar from Wgbar
-    df['Wgbar'] = df['Fnewton']
-    df['log_Wgbar'] = np.log10(df['Wgbar'])
-    df['Wbar'] = velocity(R, df['Wgbar'])
+    # S for simulated
+    # later use P for predicted
+    # Sbar from Sgbar
+    df['Sgbar'] = df['Fnewton']
+    df['Sbar'] = velocity(R, df['Sgbar'])
     
     # benchmark log bars, so can filter data
     # for a certain quality threshold
-    df['VWdiff'] = (df['Wgbar']/df['Vgbar'])-1
-    df['VWdiffabs'] = np.abs(df['VWdiff'])
+    df['VSdiff'] = (df['Sgbar']/df['Vgbar'])-1
+    df['VSdiffabs'] = np.abs(df['VSdiff'])
 
     # additional helper variables
     df['rel_R'] = df['R']/df['R'].max()

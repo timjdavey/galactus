@@ -40,34 +40,38 @@ class Analysis:
         else:
             return self.sample()
 
-    @cached_property
     def az_summary(self):
-        return az.summary(trace, fmt='long')
+        return az.summary(self.trace, fmt='long')
     
     def adjustment_MAP(self):
         """ Same as adjustment_df but uses
         the fast MAP params rather than
         the full posterior mean values """
-        data = {'Galaxy': self.model.coords['Galaxy']}
-        for p in self.params_galaxy:
-            data[p] = self.MAP[p]
-        df = pd.DataFrame(data)
-        df['Source'] = self.name
-        return df
+        if self.params_galaxy:
+            data = {'Galaxy': self.model.coords['Galaxy']}
+            for p in self.params_galaxy:
+                data[p] = self.MAP[p]
+            df = pd.DataFrame(data)
+            df['Source'] = self.name
+            return df
+        else:
+            return None
 
     def adjustment_FULL(self):
         """ The per galaxy settings to create a new
         Result set for Inc, Yetcs """
-        summary = self.az_summary
-        adjustments = []
-    
-        for galaxy, gdf in summary.groupby('Galaxy'):
-            data = {'Galaxy': galaxy, 'Source': self.name}
-            for param in self.params_galaxy:
-                data[param] = gdf[param]['mean']
-                data['e_%s' % param] = gdf[param]['sd']
-            adjustments.append(data)
-        return pd.DataFrame(adjustments)
+        if self.params_galaxy:
+            summary = self.az_summary()
+            adjustments = []
+            for galaxy, gdf in summary.groupby('Galaxy'):
+                data = {'Galaxy': galaxy, 'Source': self.name}
+                for param in self.params_galaxy:
+                    data[param] = gdf[param]['mean']
+                    data['e_%s' % param] = gdf[param]['sd']
+                adjustments.append(data)
+            return pd.DataFrame(adjustments)
+        else:
+            return None
 
     def params(self, fast=False):
         if fast:
@@ -75,17 +79,17 @@ class Analysis:
             self.uni = dict([(p, self.MAP[p]) for p in self.params_uni])
         else:
             self.adjs = self.adjustment_FULL()
-            mean = self.summary.reset_index().query('index=="mean"')
+            mean = self.az_summary().reset_index().query('index=="mean"')
             self.uni = dict([(p, mean[p].mean()) for p in self.params_uni])
         return self.adjs, self.uni
 
     def sample(self, draws=500, cores=4, tune=None):
         """ Samples the model """
-        if tune is None: tune == draws*2
+        if tune is None: tune = draws*2
         with self.model:
             self._trace = pm.sample(tune=tune, draws=draws,
                 cores=cores, return_inferencedata=True,
-                target_aceept=0.9, start=self.MAP())
+                target_accept=0.9, start=self.MAP)
         return self._trace
 
     def plot_posterior(self, galaxy=False):
@@ -105,12 +109,15 @@ class Analysis:
             # once you've done the adjustments via inputting it into a Results object
             # this will update the mass ratios, R etc for us
             # so can safely use here
-            T_force = self.null_function(result.dataframe['Fnewton'], result.dataframe['Fnulled'], **uni)
-            result.dataframe['Tgbar'] = T_force
-            result.dataframe['log_Tgbar'] = np.log10(T_force)
-            result.dataframe['Tbar'] = velocity(result.dataframe['R'], T_force)
-            result.idens=('V','W','T')
+            predicted_force = self.null_function(result.dataframe['Fnewton'], result.dataframe['Fnulled'],
+                # always pass tau, as add as zero
+                tau=result.dataframe['tau'], **uni)
+            result.dataframe['Pgbar'] = predicted_force
+            result.dataframe['Pbar'] = velocity(result.dataframe['R'], predicted_force)
+            result.idens = ('V','S','P')
 
+        # saves last generated result for convience
+        self.result = result
         return result
 
 

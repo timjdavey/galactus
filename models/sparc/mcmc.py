@@ -2,8 +2,10 @@ import pymc3 as pm
 import theano.tensor as tt
 import pandas as pd
 import numpy as np
+from models.equations import null_gravity
 
-def mcmc(df, train_null=True, train_inc=True, train_y=False, train_tau=False, train_d=False, train_epsilon=False):
+def mcmc(df, mode='velocity',
+    train_null=True, train_epsilon=True, train_inc=False, train_y=False, train_tau=False):
     coords = {
         "Galaxy": df.Galaxy.unique(),
         "Observation": df.Vobs.index
@@ -12,7 +14,6 @@ def mcmc(df, train_null=True, train_inc=True, train_y=False, train_tau=False, tr
     # using the ref values as the initial reference points
     params = []
     if train_inc: params += ['Inc', 'e_Inc']
-    if train_d: params += ['D', 'e_D']
     if train_y: params += ['Ydisk','e_Ydisk','Ybul','e_Ybul']
     reference = df.groupby('Galaxy').mean()[params]
     
@@ -29,18 +30,13 @@ def mcmc(df, train_null=True, train_inc=True, train_y=False, train_tau=False, tr
         if train_null:
             gamma = pm.Uniform('gamma', 0.5, 300)
             alpha = pm.Uniform('alpha', 0.05, 1)
-            epsilon = pm.Uniform('epsilon', 0, 20) if train_epsilon else 1
+            epsilon = pm.Uniform('epsilon', -100, 100) if train_epsilon else 1
         
         # Galaxy priors
-        
-        # As per method of RAR paper
         if train_inc:
+            # As per method of RAR paper
             DegreesNormal = pm.Bound(pm.Normal, lower=0.0, upper=90.0)
             inc = DegreesNormal('Inc', mu=reference.Inc, sigma=reference.e_Inc, dims='Galaxy')
-        
-        if train_d:
-            DistanceNormal = pm.Bound(pm.Normal, lower=0.0)
-            dist = DistanceNormal('D', mu=reference.D, sigma=reference.e_D, dims='Galaxy')
         
         if train_y:
             SurfaceNormal = pm.Bound(pm.Normal, lower=0.2, upper=1.2) # reasonable physical bounds
@@ -52,7 +48,6 @@ def mcmc(df, train_null=True, train_inc=True, train_y=False, train_tau=False, tr
 
         # Data
         radius = pm.Data("radius", df.R, dims="Observation")
-        sparc_d = pm.Data("sparc_distance", df.D, dims="Observation")
         sparc_inc = pm.Data("sparc_inc", df.Inc, dims="Observation")
         g = pm.Data("g", df.gidx, dims="Observation")
         
@@ -70,16 +65,23 @@ def mcmc(df, train_null=True, train_inc=True, train_y=False, train_tau=False, tr
         # Prediction model
         # adjust for nulled field
         total_null = nulled+tau[g] if train_tau else nulled
-        Fprime = gamma*force/(1+(epsilon*(total_null))**alpha) if train_null else force
-        # adjust r for distance
-        Rprime = radius*dist[g]/sparc_d[g] if train_d else radius
+        Fprime = null_gravity(force, total_null, gamma, alpha, epsilon)
         # calculate velocity
-        Velocity = tt.sgn(Fprime)*(tt.abs_(Fprime*Rprime)**0.5)
+        Velocity = tt.sgn(Fprime)*(tt.abs_(Fprime*radius)**0.5)
         # adjust the predicition for inclination of Vobs
         conv = np.pi/180
-        Predicition = Velocity*tt.sin(inc[g]*conv)/tt.sin(sparc_inc[g]*conv) if train_inc else Velocity
+        Vpred = Velocity*tt.sin(inc[g]*conv)/tt.sin(sparc_inc[g]*conv) if train_inc else Velocity
         
         # Define likelihood
-        obs = pm.Normal("obs", mu=Predicition, sigma=df.e_Vobs, observed=df.Vobs, dims="Observation")
+        if mode == 'velocity':
+            obs = pm.Normal("obs", mu=Vpred, sigma=df.e_Vobs, observed=df.Vobs, dims="Observation")
+        else:
+            Fpred = (Vpred**2)/radius
+            Fobs = (df.Vobs**2)/df.R
+            if mode == 'log_g':
+                Fpred = tt.log10(Fpred)
+                Fobs = np.log10(Fobs)
+            obs = pm.Normal("obs", mu=Fpred, sigma=df.e_Vobs**2, observed=Fobs, dims="Observation")
+
     
     return galaxy_model
