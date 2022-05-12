@@ -4,8 +4,8 @@ import pandas as pd
 import numpy as np
 from models.equations import null_gravity
 
-def mcmc(df, mode='velocity',
-    train_null=True, train_epsilon=True, train_inc=False, train_y=False, train_tau=False):
+def mcmc(df, velocity=False,
+    train_null=True, train_epsilon=False, train_inc=False, train_y=False, train_tau=False):
     coords = {
         "Galaxy": df.Galaxy.unique(),
         "Observation": df.Vobs.index
@@ -73,9 +73,11 @@ def mcmc(df, mode='velocity',
         Vpred = Velocity*tt.sin(inc[g]*conv)/tt.sin(sparc_inc[g]*conv) if train_inc else Velocity
         
         # Define likelihood
-        if mode == 'velocity':
+        if velocity:
             obs = pm.Normal("obs", mu=Vpred, sigma=df.e_Vobs, observed=df.Vobs, dims="Observation")
         else:
+            # seems to give flatter residuals
+            # and tighter 
             Fpred = (Vpred**2)/radius
             Fobs = (df.Vobs**2)/df.R
             obs = pm.Normal("obs", mu=Fpred, sigma=df.e_Vobs**2, observed=Fobs, dims="Observation")
