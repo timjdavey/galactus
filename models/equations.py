@@ -17,4 +17,4 @@ def velocity(R, F):
 
 def null_gravity(force, nulled, gamma, alpha, epsilon=1, tau=0):
     """ The gravity force adjustment equation """
-    return gamma*force/(1+epsilon*((nulled+tau)**alpha))
+    return gamma*force/(1+(epsilon*((nulled+tau)**alpha)))

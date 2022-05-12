@@ -120,6 +120,11 @@ class Analysis:
         self.result = result
         return result
 
+    def corner(self):
+        """ Plots a corner plot """
+        import corner
+        corner.corner(self.trace)
+
 
 
 

@@ -78,9 +78,6 @@ def mcmc(df, mode='velocity',
         else:
             Fpred = (Vpred**2)/radius
             Fobs = (df.Vobs**2)/df.R
-            if mode == 'log_g':
-                Fpred = tt.log10(Fpred)
-                Fobs = np.log10(Fobs)
             obs = pm.Normal("obs", mu=Fpred, sigma=df.e_Vobs**2, observed=Fobs, dims="Observation")
 
     
