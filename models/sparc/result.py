@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 from models.load import load_sparc
 from models.sparc.dataframe import augment_df
 from models.sparc.profile import COLOR_SCHEME
+from models.equations import velocity, null_gravity
 
 threshold_label = 'Threshold'
 
@@ -178,13 +179,13 @@ class Result:
                 if velocity:
                     x, y = '%sbar' % iden, 'Vobs'
                     lx, ly = np.log10(df[x]), np.log10(df[y])
-                    xlabel = 'Observed Velocity'
-                    ylabel = '%s Velocity' % self.iden_labels[iden]
+                    ylabel = 'Observed Velocity'
+                    xlabel = '%s Velocity' % self.iden_labels[iden]
                 else:
                     x, y = '%sgbar' % iden, 'gobs'
                     lx, ly = np.log10(df[x]), np.log10(df[y])
-                    xlabel = 'Log of Observed g'
-                    ylabel = 'Log of %s g' % self.iden_labels[iden]
+                    ylabel = 'Log of Observed g'
+                    xlabel = 'Log of %s g' % self.iden_labels[iden]
                 
                 # rel_R coloured scatter
                 if kind == 0:
@@ -323,4 +324,13 @@ class Result:
             
             if count and i == count-1: return
     
-    
+    def apply_prediction(self, params, null_function=null_gravity, iden='P'):
+        # once you've done the adjustments via inputting it into a Results object
+        # this will update the mass ratios, R etc for us
+        # so can safely use here
+        predicted_force = null_function(self.dataframe['Fnewton'], self.dataframe['Fnulled'],
+            # always pass tau, as add as zero
+            tau=self.dataframe['tau'], **params)
+        self.dataframe['%sgbar' % iden] = predicted_force
+        self.dataframe['%sbar' % iden] = velocity(self.dataframe['R'], predicted_force)
+        self.idens = ('V','S',iden)

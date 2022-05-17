@@ -12,7 +12,7 @@ class Analysis:
     UNIVERSE = ['gamma', 'alpha', 'epsilon']
     GALAXY = ['Inc', 'D', 'N', 'Ydisk', 'Ybul', 'tau']
 
-    def __init__(self, name, model, null_function=null_gravity):
+    def __init__(self, name, model):
         self.name = name
         self.model = model
         self.null_function = null_function
@@ -102,19 +102,12 @@ class Analysis:
         """ Generates a result object, using a fast MAP or default full sample """
 
         adjs, uni = self.params(fast)
-        result = Result(adjustments=adjs, *args, **kwargs)
+        if not result:
+            result = Result(adjustments=adjs, *args, **kwargs)
         
         # don't assume that there are universal params
         if uni:
-            # once you've done the adjustments via inputting it into a Results object
-            # this will update the mass ratios, R etc for us
-            # so can safely use here
-            predicted_force = self.null_function(result.dataframe['Fnewton'], result.dataframe['Fnulled'],
-                # always pass tau, as add as zero
-                tau=result.dataframe['tau'], **uni)
-            result.dataframe['Pgbar'] = predicted_force
-            result.dataframe['Pbar'] = velocity(result.dataframe['R'], predicted_force)
-            result.idens = ('V','S','P')
+            result.apply_prediction(uni, self.null_function)
 
         # saves last generated result for convience
         self.result = result
