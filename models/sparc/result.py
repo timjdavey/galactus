@@ -29,14 +29,13 @@ IDENS = {
     'P': 'Predicted', # Using adjusted values
 }
 
-
 class Result:
     """
     Wrapper class to do basic analysis on the whole SPARC set of results.
     """
 
     def __init__(self, adjustments=None, queries_strs=DEBUG, iden_labels=IDENS,
-                threshold=0.1, idens=('V','S'), simulations=None, full_interp=False):
+                threshold=0.1, idens=('V','S'), simulations=None, null_type=0):
         
         # load all that it can find
         if simulations is None:
@@ -45,17 +44,17 @@ class Result:
         dfs = []
         for name, sim in simulations.items():
             if adjustments is None:
-                dfs.append(augment_df(sim, full_interp=full_interp))
+                dfs.append(augment_df(sim, null_type=null_type))
             else:
                 gdf = adjustments.query("Galaxy=='%s'" % name)
 
                 # if the galaxy isn't present in adjustments
                 # because adjustments is from a trained MCMC
                 # from a filtered dataset
-                # would need to go back and retain on
+                # would need to go back and retrain on
                 # set with global values of gamma, alpha etc
                 if len(gdf) > 0:
-                    dfs.append(augment_df(sim, gdf, full_interp=full_interp))
+                    dfs.append(augment_df(sim, gdf, null_type=null_type))
 
         self.dataframe = pd.concat(dfs, ignore_index=True)
         self.simulations = simulations
@@ -250,10 +249,11 @@ class Result:
         fig, axes = plt.subplots(len(datakeys), 3, sharey=True, figsize=(20,5*len(datakeys)))
         
         for i, dk in enumerate(datakeys):
+            ax = axes[i] if len(datakeys) > 1 else axes
             df = datasets[dk]
-            self.residual(df, iden=iden, resid='%sgbar' % iden, xlabel='Log(%s g)' % self.iden_labels[iden], ax=axes[i][0])
-            self.residual(df, iden=iden, resid='mhi_R', xlabel='Log(R/MHI)', ax=axes[i][1])
-            self.residual(df, iden=iden, resid='Fnulled', xlabel='Log(F nulled)', ax=axes[i][2])
+            self.residual(df, iden=iden, resid='%sgbar' % iden, xlabel='Log(%s g)' % self.iden_labels[iden], ax=ax[0])
+            self.residual(df, iden=iden, resid='mhi_R', xlabel='Log(R/MHI)', ax=ax[1])
+            self.residual(df, iden=iden, resid='Fnulled', xlabel='Log(F nulled)', ax=ax[2])
 
     def residual(self, df=None, resid='mhi_R', iden='V', ax=None, plot=True, **kwargs):
         """ Plots a specific log residual """
@@ -285,12 +285,12 @@ class Result:
                 if key == 'obs':
                     g.errorbar(df['R'], df['Vobs'], yerr=df['e_Vobs'], ecolor=color, fmt='.k')
                     sns.scatterplot(data=df, x='R', y='Vbar', ax=ax, color='grey', label='Vbar')
-                    sns.lineplot(data=df, x='R', y='Wbar', ax=ax, color='grey', label='Wbar')
+                    sns.lineplot(data=df, x='R', y='Sbar', ax=ax, color='grey', label='Sbar')
                     if 'Tbar' in df:
-                        sns.lineplot(data=df, x='R', y='Tbar', ax=ax, color=color, label='Tbar')
+                        sns.lineplot(data=df, x='R', y='Pbar', ax=ax, color=color, label='Pbar')
                 else:
-                    if 'W%s' % key in df.columns:
-                        sns.lineplot(data=df, x='R', y='W%s' % key, ax=ax, color=color, label='W%s' % key)
+                    if 'S%s' % key in df.columns:
+                        sns.lineplot(data=df, x='R', y='S%s' % key, ax=ax, color=color, label='S%s' % key)
             return g
  
         # how many plots

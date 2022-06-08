@@ -10,14 +10,15 @@ from models.sparc.result import Result
 class Analysis:
 
     UNIVERSE = ['gamma', 'alpha', 'epsilon']
-    GALAXY = ['Inc', 'D', 'N', 'Ydisk', 'Ybul', 'tau']
+    GALAXY = ['Inc', 'D', 'N', 'Ydisk', 'Ybul', 'tau', 'alpha_g']
 
-    def __init__(self, name, model):
+    def __init__(self, model, name=None, null_function=None):
         self.name = name
         self.model = model
         self.null_function = null_function
         self.uni = None
         self.adjs = None
+        self.result = None
 
     @cached_property
     def params_galaxy(self):
@@ -102,16 +103,14 @@ class Analysis:
         """ Generates a result object, using a fast MAP or default full sample """
 
         adjs, uni = self.params(fast)
-        if not result:
-            result = Result(adjustments=adjs, *args, **kwargs)
-        
-        # don't assume that there are universal params
-        if uni:
-            result.apply_prediction(uni, self.null_function)
-
         # saves last generated result for convience
-        self.result = result
-        return result
+        self.result = Result(adjustments=adjs, *args, **kwargs)
+
+        # don't assume that there are universal params
+        if uni and self.null_function:
+            self.result.apply_prediction(uni, self.null_function)
+
+        return self.result
 
     def corner(self):
         """ Plots a corner plot """
