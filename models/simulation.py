@@ -56,6 +56,7 @@ class Simulation:
         self.G = G
         self.cp = cp
         self.results = {}
+        self.fit_ratios = {}
 
     def analyse(self, sub_list=None):
         """
@@ -113,6 +114,10 @@ class Simulation:
         elif mass_ratios is False:
             mass_ratios = dict([(c, 1) for c in self.mass_labels])
 
+        # if it's been fit to a velocity curve or total mass ratio
+        for key, val in self.fit_ratios.items():
+            mass_ratios[key] *= val
+
         data = []
         absvec = ('vec', 'abs')
         
@@ -140,7 +145,7 @@ class Simulation:
             return df
 
     def mass_ratios(self, speak=False):
-        # TODO: move this to Sersic model
+        # TODO: move this to Sersic model & use fit_ratios
         ratios = {}
         msg = []
         for i, mass in enumerate(self.mass_sums):

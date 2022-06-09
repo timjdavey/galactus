@@ -72,21 +72,25 @@ def augment_df(sim, adf=None, null_type=0):
     # for now using unitary mass ratios
     # so can use raw component data in mcmc
     sdf = sim.dataframe(mass_ratios=False)
-    for label in sim.mass_labels:
-        x_right_points = sim.profile.rotmass_x(sim.space)+1
-        cdf = sdf[(sdf['component']==label) & (sdf['x'].isin(x_right_points))]
-        df['Fnewton_%s' % label] = cdf['x_vec'].to_numpy()
-        df['Fabs_%s' % label] = cdf['x_abs'].to_numpy()
+
+    # use the point to the right (slightly larger)
+    # to interp value (is always closer than linear interp)
+    x_right_points = sim.profile.rotmass_x(sim.space)+1
+    for label, cdf in sdf.groupby('component'):
+        cdf = cdf.set_index('x').loc[x_right_points]
+
+        df['Fnewton_%s' % label] = np.interp(R, cdf['rd'], cdf['x_vec'])
+        df['Fabs_%s' % label] = np.interp(R, cdf['rd'], cdf['x_abs'])
 
         if null_type == 0:
             # scalar
-            df['Fnulled_%s' % label] = (cdf['F_abs']-cdf['F_vec']).to_numpy()
+            F_abs = np.interp(R, cdf['rd'], cdf['F_abs'])
+            F_vec = np.interp(R, cdf['rd'], cdf['F_vec'])
+            df['Fnulled_%s' % label] = F_abs - F_vec
         elif null_type == 1:
             # vector
             df['Fnulled_%s' % label] = df['Fabs_%s' % label]-df['Fnewton_%s' % label]
-        elif null_type == 2:
-            # vector scalar
-            df['Fnulled_%s' % label] = np.sum([(cdf['%s_abs' % d].to_numpy()-cdf['%s_vec' % d].to_numpy())**2 for d in 'xyz'])**0.5
+
         df['S%s' % label] = velocity(R, df['Fnewton_%s' % label])
 
     # combine components

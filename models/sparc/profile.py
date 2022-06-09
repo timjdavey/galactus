@@ -3,7 +3,7 @@ sys.path.append("../")
 
 from models.space import Space
 from models.galaxy import Galaxy
-from models.equations import cos
+from models.equations import cos, velocity
 from references import sparc as sparc_imports
 
 import numpy as np
@@ -88,6 +88,10 @@ class SparcMassProfile:
         return np.sum(self.rotmass_dict['SBbul']) > 0
     
     @property
+    def fit_components(self):
+        return ['disk', 'bul'] if self.is_bul else ['disk',]
+
+    @property
     def max_r(self):
         """ Last R recorded in profile data """
         return self.decomps_dict['R'].max()
@@ -99,7 +103,7 @@ class SparcMassProfile:
         Inc > 30
         Inc < 80
 
-    def _decomps(self):
+    def _decomps(self, incs=None):
         """ Decomposition data """
 
         data = {}
@@ -108,20 +112,21 @@ class SparcMassProfile:
         # automatically fit decomposition profile
         # to the pre-decomposed points in the mass model
         # this to be updated when find out what the actual is
-        fit_components = ['disk', 'bul'] if self.is_bul else ['disk',]
-        for comp in fit_components:
-
+        for comp in self.fit_components:
+            # if passing always override
             if self.auto_fit:
-                def interop(xdata, deg):
-                    return np.interp(xdata,
-                        self.decomps_dict['R'],
-                        (self.decomps_dict['SB%s' % comp])*cos(deg))
-                
-                inc = sp.optimize.curve_fit(interop, self.mm_dict['R'],
-                            self.mm_dict['SB%s' % comp],
-                            p0=self.rar_dict['Inc'],
-                            bounds=[0,90])[0][0]
-                
+                if incs is None or comp not in incs:
+                    def interop(xdata, deg):
+                        return np.interp(xdata,
+                            self.decomps_dict['R'],
+                            (self.decomps_dict['SB%s' % comp])*cos(deg))
+                    
+                    inc = sp.optimize.curve_fit(interop, self.mm_dict['R'],
+                                self.mm_dict['SB%s' % comp],
+                                p0=self.rar_dict['Inc'],
+                                bounds=[0,90])[0][0]
+                else:
+                    inc = incs[comp]
             else:
                 inc = self.sparc_dict['Inc']
 
@@ -159,19 +164,64 @@ class SparcMassProfile:
         dc = self._decomps()
         r, z = space.rz()
         
+        # if choosing to do 2d galaxy, where z = 1
+        flat = space.points[0] == 1
+
         # need to adjust for scale
         # as density is in pc2
         # we need kpc and account for scaling
         scale = ((1000*space.scale)**2)
         
         masses = []
-        for R, comp in dc.values():
-            # interp raw sparc data
-            # that data doesn't smooth
-            masses.append(np.interp(r, R, comp)*scale)# left=0, right=0
+        for label, decomp in dc.items():
+            R, data = decomp
             
-        return np.array(masses), list(dc.keys())
+            if flat:
+                # interp raw sparc data
+                # that data doesn't smooth
+                # if donut left=0, right=0
+                # decomp[0] is the standard
+                m = np.interp(r, R, data)*scale
+            else:
+                if label == 'disk':
+                    # z to project exponentially
+                    scale_height = 0.5
+                    m = np.interp(r, R, data)*scale*np.exp(-z/scale_height)
+                elif label == 'bul':
+                    # projects as sphere
+                    m = np.interp(r+z, R, data)*scale
+                elif label == 'gas':
+                    # do not project gas
+                    # just keep as flat in centre
+                    m = space.blank()
+                    m[space.center[0]] = np.interp(r[0], R, data)*scale
+                else:
+                    raise ValueError("Unknown component %s" % label)
+            
+            masses.append(m)
+        
+        return np.array(masses), list(dc.keys()) 
     
+    def fit_simulation(self, simulation):
+        """ Fits a simulation to the Lelli mass model velocity components """
+        
+        fits = {}
+        x_points = self.rotmass_x(simulation.space)+1
+        
+        for i, component in enumerate(self.fit_components):
+            def interop(rot_r, ratio):
+                mrs = dict([(c, 1) for c in ('disk', 'gas', 'bul')])
+                mrs[component] = ratio
+                df = simulation.dataframe(mrs)
+                cdf = df.query('component=="%s"' % component).set_index('x').loc[x_points]
+                return velocity(rot_r, np.interp(rot_r, cdf['rd'], cdf['x_vec']))
+            
+            fit, _ = sp.optimize.curve_fit(interop, self.rotmass_dict['R'],
+                                    self.rotmass_dict['V%s' % component])
+            
+            fits[component] = fit[0]
+        return fits
+
     def rotmass_x(self, space):
         points = []
         c = space.center
