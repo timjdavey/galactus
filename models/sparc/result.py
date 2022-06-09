@@ -128,7 +128,7 @@ class Result:
 
         for i, name in enumerate(datasets.keys()):
             df = datasets[name]
-            g = sns.histplot(df['VWdiff'], ax=axes[i])
+            g = sns.histplot(df['VSdiff'], ax=axes[i])
             g.set(title=name)
 
         # next plot the histograms
@@ -137,7 +137,7 @@ class Result:
         for i, name in enumerate(datasets.keys()):
             # then plot scatter residuals
             df = datasets[name]
-            h = sns.scatterplot(data=df, x='rel_R', y='VWdiff',
+            h = sns.scatterplot(data=df, x='rel_R', y='VSdiff',
                 s=2, hue='MHI', palette='icefire', ax=axes[i])
             h.axhline(y=0, color='black', linestyle='dashed')
 
@@ -145,11 +145,11 @@ class Result:
         fig, axes = plt.subplots(1, 1, figsize=(20,5))
         dfs = []
         for label, df in datasets.items():
-            df = df[['VWdiffabs']].copy()
+            df = df[['VSdiffabs']].copy()
             df['set'] = label
             dfs.append(df)
         
-        sns.ecdfplot(data=pd.concat(dfs, ignore_index=True), x='VWdiffabs', hue='set', linestyle='dotted', ax=axes)
+        sns.ecdfplot(data=pd.concat(dfs, ignore_index=True), x='VSdiffabs', hue='set', linestyle='dotted', ax=axes)
 
 
     def plot_rar(self, kind=0, idens=None, query_key=None, title=None, line=[1,6], velocity=False):
@@ -271,7 +271,7 @@ class Result:
         return reg
 
 
-    def plot_velocities(self, compare=None, count=None, profiles=False, sharex=True):
+    def plot_comparison(self, compare=None, count=None, profiles=False, sharex=False):
         """
         Plots the velocity graphs of individual galaxies.
         :compare: takes another Result object to compare adj values against
