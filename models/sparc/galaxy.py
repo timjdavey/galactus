@@ -1,3 +1,7 @@
+import pickle
+import numpy as np
+import pandas as pd
+
 from models.space import Space
 from models.galaxy import Galaxy
 
