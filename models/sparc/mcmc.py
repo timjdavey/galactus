@@ -1,11 +1,11 @@
 import pymc3 as pm
-import theano.tensor as tt
+import theano.tensor as at
 import pandas as pd
 import numpy as np
 from models.equations import null_gravity
 
 def mcmc(df, train_null=True,
-    train_epsilon=False, train_tau=False,
+    train_tau=False,
     train_inc=False, train_d=False, train_y=False):
     coords = {
         "Galaxy": df.Galaxy.unique(),
@@ -13,10 +13,7 @@ def mcmc(df, train_null=True,
     }
     
     # using the ref values as the initial reference points
-    params = []
-    if train_inc: params += ['Inc', 'e_Inc']
-    if train_d: params += ['D', 'e_D']
-    if train_y: params += ['Ydisk','e_Ydisk','Ybul','e_Ybul']
+    params = ['Inc', 'e_Inc', 'D', 'e_D', 'Ydisk','e_Ydisk','Ybul','e_Ybul']
     reference = df.groupby('Galaxy').mean()[params]
     
     # for g param
@@ -30,31 +27,35 @@ def mcmc(df, train_null=True,
         
         # Universal priors
         if train_null:
-            gamma = pm.Normal('gamma', mu=10, sigma=1)#pm.Uniform('gamma', 0.5, 20)
-            alpha = pm.Normal('alpha', mu=0.5, sigma=0.005)#pm.Uniform('alpha', 0.05, 2)
-            epsilon = pm.Uniform('epsilon', -100, 100) if train_epsilon else 1
+            gamma = pm.Uniform('gamma', 0.5, 20)
+            alpha = pm.Uniform('alpha', 0.05, 2)
+        else:
+            gamma = 1
+            alpha = 1
         
         # Galaxy priors
         if train_inc:
             # As per method of RAR paper
             DegreesNormal = pm.Bound(pm.Normal, lower=0.0, upper=90.0)
-            inc = DegreesNormal('Inc', mu=reference.Inc, sigma=reference.e_Inc/10, dims='Galaxy')
+            inc = DegreesNormal('Inc', mu=reference.Inc, sigma=reference.e_Inc, dims='Galaxy')
 
         if train_d:
             DistanceNormal = pm.Bound(pm.Normal, lower=0.1)
-            dist = DistanceNormal('D', mu=reference.D, sigma=reference.e_D/100, dims='Galaxy')
+            dist = DistanceNormal('D', mu=reference.D, sigma=reference.e_D, dims='Galaxy')
 
         if train_y:
-            SurfaceNormal = pm.Bound(pm.Normal, lower=0.5, upper=2) # reasonable physical bounds
-            Ydisk = SurfaceNormal('Ydisk', mu=reference.Ydisk, sigma=reference.e_Ydisk/100, dims='Galaxy')
-            Ybul = SurfaceNormal('Ybul', mu=reference.Ybul, sigma=reference.e_Ybul/100, dims='Galaxy')
+            SurfaceNormal = pm.Bound(pm.Normal, lower=0.2, upper=1) # reasonable physical bounds
+            Ydisk = SurfaceNormal('Ydisk', mu=reference.Ydisk, sigma=reference.e_Ydisk/50, dims='Galaxy')
+            Ybul = SurfaceNormal('Ybul', mu=reference.Ybul, sigma=reference.e_Ybul/50, dims='Galaxy')
         
         if train_tau:
             tau = pm.Exponential('tau', 1, dims='Galaxy')
 
         # Data
+        sparc_inc = pm.Data("sparc_inc", reference.Inc, dims="Galaxy")
+        sparc_d = pm.Data("sparc_d", reference.D, dims="Galaxy")
+
         radius = pm.Data("radius", df.R, dims="Observation")
-        sparc_inc = pm.Data("sparc_inc", df.Inc, dims="Observation")
         g = pm.Data("g", df.gidx, dims="Observation")
         
         if train_y:
@@ -69,12 +70,12 @@ def mcmc(df, train_null=True,
             nulled = pm.Data("nulled", df.Fnulled, dims="Observation")
         
         # Prediction model
-        # adjust for nulled field
         if train_tau:
             total_null = nulled+tau[g]
         else:
             total_null = nulled
-        Fprime = null_gravity(force, total_null, gamma, alpha, epsilon)
+
+        Fprime = null_gravity(force, total_null, gamma, alpha)
 
         if train_d:
             Rprime = radius*dist[g]/sparc_d[g]
@@ -82,12 +83,12 @@ def mcmc(df, train_null=True,
             Rprime = radius
 
         # calculate velocity
-        Velocity = tt.sgn(Fprime)*(tt.abs_(Fprime*Rprime)**0.5)
+        Velocity = at.sgn(Fprime)*(at.abs_(Fprime*Rprime)**0.5)
 
         # adjust the predicition for inclination of Vobs
         if train_inc:
             conv = np.pi/180
-            Vpred = Velocity*tt.sin(inc[g]*conv)/tt.sin(sparc_inc[g]*conv)
+            Vpred = Velocity*at.sin(inc[g]*conv)/at.sin(sparc_inc[g]*conv)
         else:
             Vpred = Velocity
         

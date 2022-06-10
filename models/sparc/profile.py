@@ -137,7 +137,7 @@ class SparcMassProfile:
             R = list(self.decomps_dict['R'])
             profile = list(self.decomps_dict['SB%s' % comp])
     
-            # make sure the data tampers to zero
+            # make sure the data tapers to zero
             # otherwise nulled will have a harsh cusp
             if self.extend_decomp:
                 R.append(R[-1]*2)
@@ -189,7 +189,7 @@ class SparcMassProfile:
                     m = np.interp(r, R, data)*scale*np.exp(-z/scale_height)
                 elif label == 'bul':
                     # projects as sphere
-                    m = np.interp(r+z, R, data)*scale
+                    m = np.interp(r+z, R, data)*scale*np.exp(-(r+z)/2)
                 elif label == 'gas':
                     # do not project gas
                     # just keep as flat in centre

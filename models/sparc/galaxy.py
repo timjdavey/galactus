@@ -1,7 +1,6 @@
 from models.space import Space
 from models.galaxy import Galaxy
 
-import seaborn as sns
 
 def generate_galaxy(profile, space_points=500, calc_points=0, rot_fit=True,
         rotmass_points=True, flat=False, zcut=10, excess_ratio=1.2, cp=None):

@@ -81,16 +81,20 @@ def augment_df(sim, adf=None, null_type=0):
 
         df['Fnewton_%s' % label] = np.interp(R, cdf['rd'], cdf['x_vec'])
         df['Fabs_%s' % label] = np.interp(R, cdf['rd'], cdf['x_abs'])
-
+        F_abs = np.interp(R, cdf['rd'], cdf['F_abs'])
+        F_vec = np.interp(R, cdf['rd'], cdf['F_vec'])
+        
         if null_type == 0:
             # scalar
-            F_abs = np.interp(R, cdf['rd'], cdf['F_abs'])
-            F_vec = np.interp(R, cdf['rd'], cdf['F_vec'])
-            df['Fnulled_%s' % label] = F_abs - F_vec
+            nulled = F_abs - F_vec
         elif null_type == 1:
             # vector
-            df['Fnulled_%s' % label] = df['Fabs_%s' % label]-df['Fnewton_%s' % label]
-
+            nulled = df['Fabs_%s' % label]-df['Fnewton_%s' % label]
+        elif null_type == 2:
+            # solo
+            nulled = F_abs
+        
+        df['Fnulled_%s' % label] = nulled
         df['S%s' % label] = velocity(R, df['Fnewton_%s' % label])
 
     # combine components
