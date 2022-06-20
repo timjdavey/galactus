@@ -4,14 +4,20 @@ import pandas as pd
 import numpy as np
 from models.equations import null_gravity
 
-def mcmc(df, train_null=True,
-    train_tau=False,
-    train_inc=False, train_d=False, train_y=False):
+TIGHT = {'Inc': 1, 'D': 1, 'Ydisk': 20, 'Ybul': 20}
+
+def mcmc(df, 
+    velocity=False, null_func=null_gravity,
+    train_null=True, train_tau=False,
+    train_inc=False, train_d=False, train_y=False, tight=None):
     coords = {
         "Galaxy": df.Galaxy.unique(),
         "Observation": df.Vobs.index
     }
     
+    if tight:
+        TIGHT.update(tight)
+
     # using the ref values as the initial reference points
     params = ['Inc', 'e_Inc', 'D', 'e_D', 'Ydisk','e_Ydisk','Ybul','e_Ybul']
     reference = df.groupby('Galaxy').mean()[params]
@@ -27,7 +33,7 @@ def mcmc(df, train_null=True,
         
         # Universal priors
         if train_null:
-            gamma = pm.Uniform('gamma', 0.5, 20)
+            gamma = pm.Uniform('gamma', 0.5, 200)
             alpha = pm.Uniform('alpha', 0.05, 2)
         else:
             gamma = 1
@@ -37,16 +43,16 @@ def mcmc(df, train_null=True,
         if train_inc:
             # As per method of RAR paper
             DegreesNormal = pm.Bound(pm.Normal, lower=0.0, upper=90.0)
-            inc = DegreesNormal('Inc', mu=reference.Inc, sigma=reference.e_Inc, dims='Galaxy')
+            inc = DegreesNormal('Inc', mu=reference.Inc, sigma=reference.e_Inc/TIGHT['Inc'], dims='Galaxy')
 
         if train_d:
             DistanceNormal = pm.Bound(pm.Normal, lower=0.1)
-            dist = DistanceNormal('D', mu=reference.D, sigma=reference.e_D, dims='Galaxy')
+            dist = DistanceNormal('D', mu=reference.D, sigma=reference.e_D/TIGHT['D'], dims='Galaxy')
 
         if train_y:
-            SurfaceNormal = pm.Bound(pm.Normal, lower=0.2, upper=1) # reasonable physical bounds
-            Ydisk = SurfaceNormal('Ydisk', mu=reference.Ydisk, sigma=reference.e_Ydisk/50, dims='Galaxy')
-            Ybul = SurfaceNormal('Ybul', mu=reference.Ybul, sigma=reference.e_Ybul/50, dims='Galaxy')
+            SurfaceNormal = pm.Bound(pm.Normal, lower=0.2, upper=1.5) # reasonable physical bounds
+            Ydisk = SurfaceNormal('Ydisk', mu=reference.Ydisk, sigma=reference.e_Ydisk/TIGHT['Ydisk'], dims='Galaxy')
+            Ybul = SurfaceNormal('Ybul', mu=reference.Ybul, sigma=reference.e_Ybul/TIGHT['Ybul'], dims='Galaxy')
         
         if train_tau:
             tau = pm.Exponential('tau', 1, dims='Galaxy')
@@ -75,7 +81,7 @@ def mcmc(df, train_null=True,
         else:
             total_null = nulled
 
-        Fprime = null_gravity(force, total_null, gamma, alpha)
+        Fprime = null_func(force, total_null, gamma, alpha)
 
         if train_d:
             Rprime = radius*dist[g]/sparc_d[g]
@@ -93,7 +99,14 @@ def mcmc(df, train_null=True,
             Vpred = Velocity
         
         # Define likelihood
-        obs = pm.Normal("obs", mu=Vpred, sigma=df.e_Vobs, observed=df.Vobs, dims="Observation")
-
+        if velocity or train_d:
+            obs = pm.Normal("obs", mu=Vpred, sigma=df.e_Vobs, observed=df.Vobs, dims="Observation")
+        else:
+            # seems to give flatter residuals
+            # and tighter 
+            Fpred = (Vpred**2)/radius
+            Fobs = (df.Vobs**2)/df.R
+            obs = pm.Normal("obs", mu=Fpred, sigma=df.e_Vobs**2, observed=Fobs, dims="Observation")
+        
     
     return galaxy_model

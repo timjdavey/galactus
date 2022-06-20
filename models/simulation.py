@@ -30,10 +30,12 @@ def gravity_worker(position, masses, scale):
 
     results = []
     for mass in masses:
-        F_norm = -mass*deltas/r3
-        F_vec = [np.sum(arr) for arr in F_norm]
-        F_abs = [np.sum(arr) for arr in np.abs(F_norm)]
-        results.append([F_vec, F_abs])
+        F_comp = -mass*deltas/r3
+        # creates F_vec for z,y,x (or flexible num of dimensions)
+        F_vec = [np.sum(arr) for arr in F_comp] # np.sum(np.sum(np.sum(F_norm, axis=1), axis=1), axis=1)
+        F_abs = [np.sum(arr) for arr in np.abs(F_comp)]
+        F_scalar = np.sum(np.linalg.norm(F_comp, axis=0))
+        results.append([F_vec, F_abs, F_scalar])
     return results
 
 
@@ -84,18 +86,19 @@ class Simulation:
         """
         tic = time.perf_counter()
         point_list = self.space.list if sub_list is None else sub_list
-        tasks = len(point_list)
+        #tasks = len(point_list)
         
-        self.log("Setting up %s gravity tasks, using %s" % (tasks, memory_usage()))
+        #self.log("Setting up %s gravity tasks, using %s" % (tasks, memory_usage()))
         for count, p in enumerate(point_list):
             if p not in self.results:
                 r = gravity_worker(p, self.mass_components, self.space.scale)
-                toc = time.perf_counter()
-                diff = (toc-tic)
-                self.log("%s of %s, %.2fs in, %.2fs left, using %s" % (count+1, tasks, diff, diff*(tasks-count)/(count+1), memory_usage()))
+                #toc = time.perf_counter()
+                #diff = (toc-tic)
+                #self.log("%s of %s, %.2fs in, %.2fs left, using %s" % (count+1, tasks, diff, diff*(tasks-count)/(count+1), memory_usage()))
                 self.results[p] = r
             else:
-                self.log("%s of %s ignored as already completed" % (count, tasks))
+                pass
+                #self.log("%s of %s ignored as already completed" % (count, tasks))
         
         toc = time.perf_counter()
         self.log("completed in %.2f seconds" % (toc-tic))
@@ -128,16 +131,23 @@ class Simulation:
                 rr = dict([(d, ijk[di]) for di, d in enumerate(self.dimensions)])
                 rr['component'] = component
                 
+                # absolute & vector versions
+                # for each of the masses
                 for ci, clabel in enumerate(absvec):
                     for di, v in enumerate(mass_res[ci]):
                         key = "%s_%s" % (self.dimensions[di], clabel)
                         rr[key] = v*G*mass_ratios[component]
+
+                # scalar
+                if len(mass_res) > 2:
+                    rr['F_scalar'] = mass_res[2]*G*mass_ratios[component]
                 data.append(rr)
         
         df = pd.DataFrame(data)
         # Work out total F
         for label in absvec:
-            df['F_%s' % label] = (np.sum([df['%s_%s' % (d, label)]**2 for d in self.dimensions], axis=0))**0.5
+            df['F_%s' % label] = np.linalg.norm([df['%s_%s' % (d, label)] for d in self.dimensions], axis=0)
+            #(np.sum([df['%s_%s' % (d, label)]**2 for d in self.dimensions], axis=0))**0.5
 
         if combined:
             return df.groupby(['x','y','z']).sum().reset_index()

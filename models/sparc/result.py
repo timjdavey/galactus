@@ -189,12 +189,12 @@ class Result:
                 # rel_R coloured scatter
                 if kind == 0:
                     g = sns.scatterplot(data=df, x=lx, y=ly,
-                        alpha=1.0, s=3, hue='rel_R', palette='Spectral', ax=ax)
+                        alpha=1.0, s=2, hue=np.log10(df['mhi_R']), palette='icefire', ax=ax)
                     
                 # density
                 elif kind == 1:
                     g = sns.scatterplot(x=lx, y=ly,
-                        color='black', s=10, alpha=0.5, ax=ax)
+                        color='black', s=3, alpha=0.5, ax=ax)
                     sns.histplot(x=lx, y=ly,
                         bins=30, pthresh=.01, cmap="mako_r", alpha=0.6, ax=ax)
                     sns.kdeplot(x=lx, y=ly,
@@ -205,9 +205,10 @@ class Result:
                     g = sns.regplot(x=lx, y=ly, scatter=False, ax=ax)
 
                 # cleaner density
-                elif kind == 1:
+                elif kind == 3:
                     g = sns.histplot(x=lx, y=ly,
-                        bins=30, pthresh=.01, cmap="Blues", alpha=0.6, ax=ax)
+                        bins=30, cmap="Blues", alpha=1.0, ax=ax)
+                    g = sns.regplot(x=lx, y=ly, scatter=False, ax=ax, color='red')
                     
                 # title (dataset), reference line, labels
                 if col == 0:
@@ -264,7 +265,7 @@ class Result:
         reg = sp.stats.linregress(x, y)
 
         if plot:
-            g = sns.histplot(x=x, y=y, bins=30, pthresh=.05, cmap="Blues", ax=ax)
+            g = sns.histplot(x=x, y=y, bins=30, pthresh=.01, cmap="Blues", ax=ax)
             sns.lineplot(x=x, y=reg.slope*x+reg.intercept, color='red', ax=ax)
             g.axhline(y=0, color='grey', linestyle='dotted')
             g.set(ylabel='Log(Observed g)-Log(%s g)' % self.iden_labels[iden], **kwargs)
@@ -279,14 +280,14 @@ class Result:
         :profiles: _False_ plots the profile graphs of each galaxy if _True_
         :sharex: _True_ does what it says on the tin
         """
-        def plot_sim(df, ax, idens=('V', 'W')):
+        def plot_sim(df, ax, idens):
             for key, color in COLOR_SCHEME.items():
                 g = sns.scatterplot(data=df, x='R', y='V%s' % key, ax=ax, color=color, label='V%s' % key)
                 if key == 'obs':
                     g.errorbar(df['R'], df['Vobs'], yerr=df['e_Vobs'], ecolor=color, fmt='.k')
                     sns.scatterplot(data=df, x='R', y='Vbar', ax=ax, color='grey', label='Vbar')
                     sns.lineplot(data=df, x='R', y='Sbar', ax=ax, color='grey', label='Sbar')
-                    if 'Tbar' in df:
+                    if 'Pbar' in df:
                         sns.lineplot(data=df, x='R', y='Pbar', ax=ax, color=color, label='Pbar')
                 else:
                     if 'S%s' % key in df.columns:

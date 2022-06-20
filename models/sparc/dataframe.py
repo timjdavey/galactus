@@ -4,12 +4,12 @@ import numpy as np
 from models.equations import velocity, sin, null_gravity, combined_force
 
 
-def augment_df(sim, adf=None, null_type=0):
+def augment_df(sim, adf=None, null_type=2):
     # use rotmass as base df
     df = sim.profile.rotmass_df.copy()
 
     # append sparc table1 interesting parameters
-    for k in ('D', 'e_D', 'Inc', 'e_Inc', 'Vflat', 'e_Vflat', 'Q', 'MHI', 'L[3.6]'):
+    for k in ('D', 'e_D', 'Inc', 'e_Inc', 'Vflat', 'e_Vflat', 'Q', 'MHI', 'L[3.6]', 'Reff'):
         df[k] = sim.profile.sparc_dict[k]
 
     # with mass ratios from sparc paper by defaultadjustment
@@ -76,13 +76,21 @@ def augment_df(sim, adf=None, null_type=0):
     # use the point to the right (slightly larger)
     # to interp value (is always closer than linear interp)
     x_right_points = sim.profile.rotmass_x(sim.space)+1
+
+
     for label, cdf in sdf.groupby('component'):
         cdf = cdf.set_index('x').loc[x_right_points]
 
-        df['Fnewton_%s' % label] = np.interp(R, cdf['rd'], cdf['x_vec'])
-        df['Fabs_%s' % label] = np.interp(R, cdf['rd'], cdf['x_abs'])
-        F_abs = np.interp(R, cdf['rd'], cdf['F_abs'])
-        F_vec = np.interp(R, cdf['rd'], cdf['F_vec'])
+        def itp(label):
+            return np.interp(R, cdf['rd'], cdf[label])
+
+        df['Fnewton_%s' % label] = itp('x_vec')
+        df['Fabs_%s' % label] = itp('x_abs')
+        df['F_abs'] = itp('F_abs')
+        F_vec = itp('F_vec')
+        if 'F_scalar' in cdf:
+            df['F_scalar'] = itp('F_scalar')
+        
         
         if null_type == 0:
             # scalar
@@ -92,7 +100,13 @@ def augment_df(sim, adf=None, null_type=0):
             nulled = df['Fabs_%s' % label]-df['Fnewton_%s' % label]
         elif null_type == 2:
             # solo
-            nulled = F_abs
+            nulled = df['F_abs']
+        elif null_type == 3:
+            nulled = np.sum([(itp('%s_abs' % d)-itp('%s_vec' % d))**2 for d in 'xyz'], axis=0)**0.5
+        elif null_type == 4:
+            nulled = 0
+        elif null_type == 5:
+            nulled = itp('F_scalar')
         
         df['Fnulled_%s' % label] = nulled
         df['S%s' % label] = velocity(R, df['Fnewton_%s' % label])

@@ -24,7 +24,7 @@ def generate_galaxy(profile, space_points=500, calc_points=0, rot_fit=True,
         sim.analyse(profile.rotmass_points(space))
 
     if calc_points:
-        sim.analyse(sim.radius_points(profile.max_r*1.5, calc_points))
+        sim.analyse(sim.radius_points(profile.max_r*excess_ratio, calc_points))
     
     if rot_fit:
         sim.fit_ratios = profile.fit_simulation(sim)
