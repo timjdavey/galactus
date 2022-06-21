@@ -4,7 +4,7 @@ import numpy as np
 from models.equations import velocity, sin, null_gravity, combined_force
 
 
-def augment_df(sim, adf=None, null_type=2):
+def augment_df(sim, adf=None, null_type=None, R=None, G=None):
     # use rotmass as base df
     df = sim.profile.rotmass_df.copy()
 
@@ -12,7 +12,7 @@ def augment_df(sim, adf=None, null_type=2):
     for k in ('D', 'e_D', 'Inc', 'e_Inc', 'Vflat', 'e_Vflat', 'Q', 'MHI', 'L[3.6]', 'Reff'):
         df[k] = sim.profile.sparc_dict[k]
 
-    # with mass ratios from sparc paper by defaultadjustment
+    # with mass ratios from sparc paper by
     # https://arxiv.org/pdf/1606.09251.pdf eq.2
     mrs = {'disk': 0.5, 'gas': 1.0, 'bul': 0.7}
 
@@ -105,7 +105,7 @@ def augment_df(sim, adf=None, null_type=2):
             nulled = np.sum([(itp('%s_abs' % d)-itp('%s_vec' % d))**2 for d in 'xyz'], axis=0)**0.5
         elif null_type == 4:
             nulled = 0
-        elif null_type == 5:
+        elif null_type == 5 or null_type is None: # now becomes default
             nulled = itp('F_scalar')
         
         df['Fnulled_%s' % label] = nulled

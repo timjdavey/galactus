@@ -35,7 +35,7 @@ class Result:
     """
 
     def __init__(self, adjustments=None, queries_strs=DEBUG, iden_labels=IDENS,
-                threshold=0.1, idens=('V','S'), simulations=None, null_type=0):
+                threshold=0.1, idens=('V','S'), simulations=None, null_type=None):
         
         # load all that it can find
         if simulations is None:

@@ -25,10 +25,14 @@ class Galaxy(Simulation):
         return rl[:int(max_point)+1:max(int(max_point/points),1)][:points]
 
     def dataframe(self, *args, **kwargs):
-        """ Returns analysis as a dataframe, adding the radius """
+        """
+        Returns analysis as a dataframe, adding the radius
+        Optional `R` so can scale from kpc to m
+        """
         df = super().dataframe(*args, **kwargs)
         c = self.space.center
         scale = self.space.scale
         df['zd'] = (df['z']-c[0])*scale
-        df['rd'] = scale*((df['y']-c[1])**2 + (df['x']-c[2])**2)**0.5
+        #if R is None: R = 1
+        df['rd'] = (scale*((df['y']-c[1])**2 + (df['x']-c[2])**2)**0.5)
         return df
