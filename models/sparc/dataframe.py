@@ -85,36 +85,12 @@ def augment_df(sim, adf=None, null_type=None, R=None, G=None):
             return np.interp(R, cdf['rd'], cdf[label])
 
         df['Fnewton_%s' % label] = itp('x_vec')
-        df['Fabs_%s' % label] = itp('x_abs')
-        df['F_abs'] = itp('F_abs')
-        F_vec = itp('F_vec')
-        if 'F_scalar' in cdf:
-            df['F_scalar'] = itp('F_scalar')
-        
-        
-        if null_type == 0:
-            # scalar
-            nulled = F_abs - F_vec
-        elif null_type == 1:
-            # vector
-            nulled = df['Fabs_%s' % label]-df['Fnewton_%s' % label]
-        elif null_type == 2:
-            # solo
-            nulled = df['F_abs']
-        elif null_type == 3:
-            nulled = np.sum([(itp('%s_abs' % d)-itp('%s_vec' % d))**2 for d in 'xyz'], axis=0)**0.5
-        elif null_type == 4:
-            nulled = 0
-        elif null_type == 5 or null_type is None: # now becomes default
-            nulled = itp('F_scalar')
-        
-        df['Fnulled_%s' % label] = nulled
+        df['Fscalar_%s' % label] = itp('F_scalar')
         df['S%s' % label] = velocity(R, df['Fnewton_%s' % label])
 
     # combine components
     df['Fnewton'] = combined_force(df, 'Fnewton', sim.mass_labels, mrs)
-    df['Fabs'] = combined_force(df, 'Fabs', sim.mass_labels, mrs)
-    df['Fnulled'] = combined_force(df, 'Fnulled', sim.mass_labels, mrs)
+    df['Fscalar'] = combined_force(df, 'Fscalar', sim.mass_labels, mrs)
 
     # S for simulated
     # later use P for predicted

@@ -33,9 +33,8 @@ def gravity_worker(position, masses, scale):
         F_comp = -mass*deltas/r3
         # creates F_vec for z,y,x (or flexible num of dimensions)
         F_vec = [np.sum(arr) for arr in F_comp] # np.sum(np.sum(np.sum(F_norm, axis=1), axis=1), axis=1)
-        F_abs = [np.sum(arr) for arr in np.abs(F_comp)]
         F_scalar = np.sum(np.linalg.norm(F_comp, axis=0))
-        results.append([F_vec, F_abs, F_scalar])
+        results.append([F_vec, F_scalar])
     return results
 
 
@@ -122,7 +121,7 @@ class Simulation:
             mass_ratios[key] *= val
 
         data = []
-        absvec = ('vec', 'abs')
+        absvec = ('vec',)
         
         for ijk, result in self.results.items():
             rr = {}
