@@ -8,7 +8,7 @@ TIGHT = {'Inc': 1, 'D': 1, 'Ydisk': 20, 'Ybul': 20}
 
 def mcmc(df, 
     velocity=False, null_func=null_gravity,
-    train_null=True, train_tau=False,
+    train_null=True, train_tau=False, epsilon=0,
     train_inc=False, train_d=False, train_y=False, tight=None):
     coords = {
         "Galaxy": df.Galaxy.unique(),
@@ -38,6 +38,9 @@ def mcmc(df,
         else:
             gamma = 1
             alpha = 1
+
+        if epsilon:
+            epsilon = pm.Normal('epsilon', mu=epsilon, sigma=epsilon/2)
         
         # Galaxy priors
         if train_inc:
@@ -81,7 +84,7 @@ def mcmc(df,
         else:
             total_null = nulled
 
-        Fprime = null_func(force, total_null, gamma, alpha)
+        Fprime = null_func(force, total_null, gamma, alpha, epsilon)
 
         if train_d:
             Rprime = radius*dist[g]/sparc_d[g]

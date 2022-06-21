@@ -14,7 +14,7 @@ def augment_df(sim, adf=None, null_type=None, R=None, G=None):
 
     # with mass ratios from sparc paper by
     # https://arxiv.org/pdf/1606.09251.pdf eq.2
-    mrs = {'disk': 0.5, 'gas': 1.0, 'bul': 0.7}
+    mrs = {'disk': 0.5, 'bul': 0.7, 'gas': 1.0}
 
     # then override params
     distance, inclination = None, None
