@@ -85,19 +85,18 @@ class Simulation:
         """
         tic = time.perf_counter()
         point_list = self.space.list if sub_list is None else sub_list
-        #tasks = len(point_list)
+        tasks = len(point_list)
         
-        #self.log("Setting up %s gravity tasks, using %s" % (tasks, memory_usage()))
+        self.log("Setting up %s gravity tasks, using %s" % (tasks, memory_usage()))
         for count, p in enumerate(point_list):
             if p not in self.results:
                 r = gravity_worker(p, self.mass_components, self.space.scale)
-                #toc = time.perf_counter()
-                #diff = (toc-tic)
-                #self.log("%s of %s, %.2fs in, %.2fs left, using %s" % (count+1, tasks, diff, diff*(tasks-count)/(count+1), memory_usage()))
+                toc = time.perf_counter()
+                diff = (toc-tic)
+                self.log("%s of %s, %.2fs in, %.2fs left, using %s" % (count+1, tasks, diff, diff*(tasks-count)/(count+1), memory_usage()))
                 self.results[p] = r
             else:
-                pass
-                #self.log("%s of %s ignored as already completed" % (count, tasks))
+                self.log("%s of %s ignored as already completed" % (count, tasks))
         
         toc = time.perf_counter()
         self.log("completed in %.2f seconds" % (toc-tic))
@@ -111,9 +110,7 @@ class Simulation:
 
         # So can override mass_ratios
         # both applied later on dataform creation
-        if mass_ratios is None:
-            mass_ratios = self.mass_ratios()
-        elif mass_ratios is False:
+        if mass_ratios is False:
             mass_ratios = dict([(c, 1) for c in self.mass_labels])
 
         # if it's been fit to a velocity curve or total mass ratio
@@ -121,7 +118,6 @@ class Simulation:
             mass_ratios[key] *= val
 
         data = []
-        absvec = ('vec',)
         
         for ijk, result in self.results.items():
             rr = {}
@@ -130,41 +126,23 @@ class Simulation:
                 rr = dict([(d, ijk[di]) for di, d in enumerate(self.dimensions)])
                 rr['component'] = component
                 
-                # absolute & vector versions
                 # for each of the masses
-                for ci, clabel in enumerate(absvec):
-                    for di, v in enumerate(mass_res[ci]):
-                        key = "%s_%s" % (self.dimensions[di], clabel)
-                        rr[key] = v*G*mass_ratios[component]
+                for di, v in enumerate(mass_res[0]):
+                    rr["%s_vec" % self.dimensions[di]] = v*G*mass_ratios[component]
 
                 # scalar
-                if len(mass_res) > 2:
-                    rr['F_scalar'] = mass_res[2]*G*mass_ratios[component]
+                rr['F_scalar'] = mass_res[1]*G*mass_ratios[component]
                 data.append(rr)
         
         df = pd.DataFrame(data)
         # Work out total F
-        for label in absvec:
-            df['F_%s' % label] = np.linalg.norm([df['%s_%s' % (d, label)] for d in self.dimensions], axis=0)
-            #(np.sum([df['%s_%s' % (d, label)]**2 for d in self.dimensions], axis=0))**0.5
+        df['F_vec'] = np.linalg.norm([df['%s_vec' % d] for d in self.dimensions], axis=0)
 
         if combined:
             return df.groupby(['x','y','z']).sum().reset_index()
         else:
             return df
 
-    def mass_ratios(self, speak=False):
-        # TODO: move this to Sersic model & use fit_ratios
-        ratios = {}
-        msg = []
-        for i, mass in enumerate(self.mass_sums):
-            label = self.mass_labels[i]
-            ref = self.profiles[label]['mass']
-            ratio = ref[0]/mass
-            ratios[label] = ratio
-            msg.append("%s is %.2f%% off, at %s against reference %s" % (label, (ratio-1)*100, mass, ref))
-        if speak: self.log("\n".join(msg))
-        return ratios
 
     def combine_masses(self):
         """ Combines the mass components into a single mass, to speed up analysis of large spaces """
