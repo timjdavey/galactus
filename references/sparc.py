@@ -78,13 +78,15 @@ def adjustment_df(directory=DIR):
     sdf['e_Ydisk'] = 0.5*astro_scatter
     sdf['Ybul'] = 0.7
     sdf['e_Ybul'] = 0.7*astro_scatter
+    sdf['Ymass'] = 1.0
+    sdf['e_Ymass'] = 0.1
     sdf['Source'] = 'SPARC'
-    
+
     # project the rotmass values onto it
     rdf = rar_df(directory=DIR)
     mass_cols = ['Ydisk', 'e_Ydisk', 'Ybul', 'e_Ybul']
     rdf = rdf[standard_cols+mass_cols].copy()
-    rdf['Source'] = 'RAR'
+    rdf['Source'] = 'RAR'    
     
     return pd.concat([sdf, rdf], sort=False, ignore_index=True)
 

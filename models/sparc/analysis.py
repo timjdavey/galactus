@@ -10,7 +10,7 @@ from models.sparc.result import Result
 class Analysis:
 
     UNIVERSE = ['gamma', 'alpha', 'epsilon']
-    GALAXY = ['Inc', 'D', 'N', 'Ydisk', 'Ybul', 'tau', 'alpha_g']
+    GALAXY = ['Inc', 'D', 'N', 'Ydisk', 'Ybul', 'Ymass', 'tau', 'alpha_g']
 
     def __init__(self, model, name=None, null_function=None):
         self.name = name

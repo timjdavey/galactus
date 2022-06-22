@@ -13,6 +13,8 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 
 
+MASS_RATIOS = {'disk': 0.5, 'bul': 0.7, 'gas': 1.0}
+
 def generate_profiles():
     """
     Generates Mass Profiles for all galaxies possible 
@@ -41,6 +43,15 @@ def generate_profiles():
         )
     return profiles
 
+
+def quality_profiles(Q=2):
+    """ Generates just for high quality """
+    profiles = generate_profiles()
+    quality = {}
+    for k, p in profiles.items():
+        if p.sparc_dict['Q'] <= Q:
+            quality[k] = p
+    return quality
 
 def df2dict(df):
     """ Like .to_dict() but avoids the index """
@@ -86,10 +97,14 @@ class SparcMassProfile:
     def is_bul(self):
         """ Does it have a bulge? """
         return np.sum(self.rotmass_dict['SBbul']) > 0
-    
+
     @property
     def fit_components(self):
         return ['disk', 'bul'] if self.is_bul else ['disk',]
+
+    @property
+    def labels(self):
+        return self.fit_components+['gas']
 
     @property
     def max_r(self):

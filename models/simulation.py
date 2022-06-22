@@ -24,7 +24,11 @@ def gravity_worker(position, masses, scale):
     # r^2 for Force formula
     r2 = np.sum(deltas**2, axis=0)
     # handle the divide by zero error for position
-    r2[tuple(position)] = 1e6
+    try:
+        r2[tuple(position)] = 1e6
+    except IndexError:
+        pass # if out of bounds
+
     # convert that to r^3 to normalise vectors in each axis
     r3 = r2**1.5
 
@@ -59,7 +63,7 @@ class Simulation:
         self.results = {}
         self.fit_ratios = {}
 
-    def analyse(self, sub_list=None):
+    def analyse(self, sub_list=None, verbose=True):
         """
         Does the main bulk of the analysis
 
@@ -85,22 +89,28 @@ class Simulation:
         """
         tic = time.perf_counter()
         point_list = self.space.list if sub_list is None else sub_list
-        tasks = len(point_list)
-        
-        self.log("Setting up %s gravity tasks, using %s" % (tasks, memory_usage()))
+        tasks = self.space.count if sub_list is None else len(sub_list)
+
         for count, p in enumerate(point_list):
             if p not in self.results:
                 r = gravity_worker(p, self.mass_components, self.space.scale)
-                toc = time.perf_counter()
-                diff = (toc-tic)
-                self.log("%s of %s, %.2fs in, %.2fs left, using %s" % (count+1, tasks, diff, diff*(tasks-count)/(count+1), memory_usage()))
+                if verbose:
+                    self.log("%s of %s completed" % (count, tasks))
                 self.results[p] = r
             else:
-                self.log("%s of %s ignored as already completed" % (count, tasks))
+                if verbose:
+                    self.log("%s of ignored as already completed" % (count))
         
         toc = time.perf_counter()
         self.log("completed in %.2f seconds" % (toc-tic))
-        
+    
+    @cached_property
+    def scalar_map(self):
+        smap = self.space.blank()
+        for point, vals in self.results.items():
+            smap[point] = vals[0][1] # the scalar returned
+        return smap
+
     def dataframe(self, mass_ratios=False, G=None, combined=False):
         # So can override G
         if G is None:
@@ -131,7 +141,7 @@ class Simulation:
                     rr["%s_vec" % self.dimensions[di]] = v*G*mass_ratios[component]
 
                 # scalar
-                rr['F_scalar'] = mass_res[1]*G*mass_ratios[component]
+                rr['F_scalar'] = mass_res[-1]*G*mass_ratios[component]
                 data.append(rr)
         
         df = pd.DataFrame(data)
@@ -143,10 +153,14 @@ class Simulation:
         else:
             return df
 
-
-    def combine_masses(self):
+    def combine_masses(self, mrs=None):
         """ Combines the mass components into a single mass, to speed up analysis of large spaces """
-        self.mass_components = np.array([np.sum(self.mass_components, axis=0),])
+        if mrs is None:
+            self.mass_components = np.array([np.sum(self.mass_components, axis=0),])
+        else:
+            self.mass_components = np.array([np.sum([c*mrs[self.mass_labels[i]] for i, c in enumerate(self.mass_components)], axis=0),])
+
+        self.mass_components.flags.writeable = False
         self.mass_labels = ['combined',]
         self.results = {}
 

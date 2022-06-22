@@ -2,9 +2,9 @@ import pandas as pd
 import numpy as np
 
 from models.equations import velocity, sin, null_gravity, combined_force
+from models.sparc.profile import MASS_RATIOS
 
-
-def augment_df(sim, adf=None, null_type=None, R=None, G=None):
+def augment_df(sim, adf=None, R=None, G=None):
     # use rotmass as base df
     df = sim.profile.rotmass_df.copy()
 
@@ -14,12 +14,12 @@ def augment_df(sim, adf=None, null_type=None, R=None, G=None):
 
     # with mass ratios from sparc paper by
     # https://arxiv.org/pdf/1606.09251.pdf eq.2
-    mrs = {'disk': 0.5, 'bul': 0.7, 'gas': 1.0}
+    mrs = MASS_RATIOS.copy()
 
     # then override params
     distance, inclination = None, None
     if adf is not None:
-        # handle defaults
+        # baseline Lelli
         if 'Ydisk' in adf:
             mrs={
                 'disk': adf.Ydisk.values[0],
@@ -32,13 +32,20 @@ def augment_df(sim, adf=None, null_type=None, R=None, G=None):
             inclination = adf.Inc.values[0]
 
     # store Y's
-    for key, value in mrs.items():
-        df['Y%s' % key] = value
-        ekey = 'e_Y%s' % key
-        if adf is not None and ekey in adf:
-            df[ekey] = adf[ekey].values[0]
-        else:
-            df[ekey] = value*10**0.1
+    if adf is not None and 'Ymass' in adf:
+        Ymass = adf.Ymass.values[0]
+        for k, v in mrs.items():
+            mrs[k] *= Ymass
+        df['Ymass'] = Ymass
+
+    else:
+        for key, value in mrs.items():
+            df['Y%s' % key] = value
+            ekey = 'e_Y%s' % key
+            if adf is not None and ekey in adf:
+                df[ekey] = adf[ekey].values[0]
+            else:
+                df[ekey] = value*10**0.1
 
     # Tau - add it as standard so can use it in all equation uses
     tau_key = 'tau'
@@ -52,7 +59,7 @@ def augment_df(sim, adf=None, null_type=None, R=None, G=None):
     if distance is not None:
         dist_adjust = distance/sim.profile.sparc_dict['D']
         R = R*dist_adjust
-        for c in sim.mass_labels:
+        for c in sim.profile.labels:
             df['V%s' % c] = df['V%s' % c]*(dist_adjust**0.5)
         
         # update original sparc values to newly supplied versions
@@ -64,7 +71,7 @@ def augment_df(sim, adf=None, null_type=None, R=None, G=None):
         df['Inc'] = inclination
 
     # calculate additional added needed for benchmarking rar
-    df['Vbar'] = np.sum([mrs[c]*df["V%s" % c]**2 for c in sim.mass_labels],axis=0)**0.5
+    df['Vbar'] = np.sum([mrs[c]*df["V%s" % c]**2 for c in sim.profile.labels],axis=0)**0.5
     df['Vgbar'] = df['Vbar']**2/R
     df['gobs'] = df['Vobs']**2/R
 
@@ -77,20 +84,28 @@ def augment_df(sim, adf=None, null_type=None, R=None, G=None):
     # to interp value (is always closer than linear interp)
     x_right_points = sim.profile.rotmass_x(sim.space)+1
 
-
-    for label, cdf in sdf.groupby('component'):
-        cdf = cdf.set_index('x').loc[x_right_points]
-
-        def itp(label):
-            return np.interp(R, cdf['rd'], cdf[label])
-
-        df['Fnewton_%s' % label] = itp('x_vec')
-        df['Fscalar_%s' % label] = itp('F_scalar')
-        df['S%s' % label] = velocity(R, df['Fnewton_%s' % label])
-
-    # combine components
-    df['Fnewton'] = combined_force(df, 'Fnewton', sim.mass_labels, mrs)
-    df['Fscalar'] = combined_force(df, 'Fscalar', sim.mass_labels, mrs)
+    # when doing traditional scalar fields on multiple components
+    # or when have combined them ahead of time for speed improvements
+    components = sdf.groupby('component')
+    if len(components) > 1:
+        for label, cdf in components:
+            cdf = cdf.set_index('x').loc[x_right_points]
+    
+            def itp(ilab):
+                return np.interp(R, cdf['rd'], cdf[ilab])
+    
+            df['Fnewton_%s' % label] = itp('x_vec')
+            df['Fscalar_%s' % label] = itp('F_scalar')
+            df['S%s' % label] = velocity(R, df['Fnewton_%s' % label])
+    
+        # combine components
+        df['Fnewton'] = combined_force(df, 'Fnewton', sim.mass_labels, mrs)
+        df['Fscalar'] = combined_force(df, 'Fscalar', sim.mass_labels, mrs)
+    else:
+        cdf = sdf.set_index('x').loc[x_right_points]
+        df['Fnewton'] = np.interp(R, cdf['rd'], cdf['x_vec'])
+        if adf is not None and 'Ymass' in adf:
+            df['Fnewton'] *= Ymass
 
     # S for simulated
     # later use P for predicted

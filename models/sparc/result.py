@@ -34,17 +34,13 @@ class Result:
     Wrapper class to do basic analysis on the whole SPARC set of results.
     """
 
-    def __init__(self, adjustments=None, queries_strs=DEBUG, iden_labels=IDENS,
-                threshold=0.1, idens=('V','S'), simulations=None, null_type=None):
-        
-        # load all that it can find
-        if simulations is None:
-            simulations = load_sparc()
+    def __init__(self, simulations, adjustments=None, queries_strs=DEBUG, iden_labels=IDENS,
+                threshold=0.1, idens=('V','S')):
 
         dfs = []
         for name, sim in simulations.items():
             if adjustments is None:
-                dfs.append(augment_df(sim, null_type=null_type))
+                dfs.append(augment_df(sim))
             else:
                 gdf = adjustments.query("Galaxy=='%s'" % name)
 
@@ -54,7 +50,7 @@ class Result:
                 # would need to go back and retrain on
                 # set with global values of gamma, alpha etc
                 if len(gdf) > 0:
-                    dfs.append(augment_df(sim, gdf, null_type=null_type))
+                    dfs.append(augment_df(sim, gdf))
 
         self.dataframe = pd.concat(dfs, ignore_index=True)
         self.simulations = simulations
@@ -242,7 +238,7 @@ class Result:
                 bins=50, pthresh=.2, cmap="mako_r", alpha=0.6, ax=axes[i])
 
 
-    def plot_residuals(self, iden=None, query_key=None):
+    def plot_residuals(self, iden=None, query_key=None, nulled=False):
         """ Plots residuals for given `iden` and `query_key` """
         datasets = self.datasets()
         if iden is None: iden = self.idens[-1]

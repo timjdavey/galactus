@@ -6,14 +6,14 @@ from models.space import Space
 from models.galaxy import Galaxy
 
 
-def generate_galaxy(profile, space_points=500, calc_points=0, rot_fit=True,
-        rotmass_points=True, flat=False, zcut=10, excess_ratio=1.2, cp=None):
+def generate_galaxy(profile, space_points=300, calc_points=0, rot_fit=True,
+        rotmass_points=True, flat=True, zcut=10, ycut=1, excess_ratio=1.2, cp=None):
     """
     Generates a sparc galaxy given a profile
     """
     uid = profile.uid
     z = 1 if flat else space_points//zcut
-    space = Space((z,space_points,space_points), profile.max_r*2*excess_ratio/space_points)
+    space = Space((z,space_points//ycut,space_points), profile.max_r*2*excess_ratio/space_points)
     masses, labels = profile.masses(space)
     
     sim = Galaxy(masses, space, mass_labels=labels, cp=cp)
