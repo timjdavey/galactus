@@ -52,6 +52,7 @@ class Analysis:
             data = {'Galaxy': self.model.coords['Galaxy']}
             for p in self.params_galaxy:
                 data[p] = self.MAP[p]
+                data['e_%s' % p] = data[p]*0.1 # dummy 10%
             df = pd.DataFrame(data)
             df['Source'] = self.name
             return df

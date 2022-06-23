@@ -118,11 +118,10 @@ def mcmc(df,
 
 
 def scalar(df, 
-    velocity=False, train_y=False,
-    train_inc=False, train_d=False, tight=None):
+    train_y=False, train_inc=False, train_d=False, tight=None):
 
     df = df.copy()
-    
+
     coords = {
         "Galaxy": df.Galaxy.unique(),
         "Observation": df.Vobs.index
@@ -188,15 +187,7 @@ def scalar(df,
             Vpred = Velocity
         
         # Define likelihood
-        if velocity or train_d:
-            obs = pm.Normal("obs", mu=Vpred, sigma=df.e_Vobs, observed=df.Vobs, dims="Observation")
-        else:
-            # seems to give flatter residuals
-            # and tighter 
-            Fpred = (Vpred**2)/radius
-            Fobs = (df.Vobs**2)/df.R
-            obs = pm.Normal("obs", mu=Fpred, sigma=df.e_Vobs**2, observed=Fobs, dims="Observation")
-        
+        obs = pm.Normal("obs", mu=Vpred, sigma=df.e_Vobs, observed=df.Vobs, dims="Observation")
     
     return galaxy_model
 

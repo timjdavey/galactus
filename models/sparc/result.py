@@ -108,7 +108,6 @@ class Result:
                 if residuals:
                     stats['Res(Log y)'] = self.residual(df, resid='%sgbar' % iden, iden=iden, plot=False).slope
                     stats['Res(Log mhi_R)'] = self.residual(df, resid='mhi_R', iden=iden, plot=False).slope
-                    stats['Res(Log nulled)'] = self.residual(df, resid='Fnulled', iden=iden, plot=False).slope
                 
                 data.append(stats)
         return pd.DataFrame(data=data)
@@ -148,7 +147,7 @@ class Result:
         sns.ecdfplot(data=pd.concat(dfs, ignore_index=True), x='VSdiffabs', hue='set', linestyle='dotted', ax=axes)
 
 
-    def plot_rar(self, kind=0, idens=None, query_key=None, title=None, line=[1,6], velocity=False):
+    def plot_rar(self, kind=0, idens=None, query_key='Everything', title=None, line=[1,6], velocity=False):
         """
         Plots various 
         kind == 0 is density plot
@@ -216,43 +215,11 @@ class Result:
     def plot_rars(self, *args, **kwargs):
         """ Plots all the rar plots. Similar to a QQ plot """
 
-        for i in range(3):
+        for i in range(4):
             self.plot_rar(kind=i, *args, **kwargs)
 
 
-    def plot_nullrelationship(self):
-        """ Plots the nulled relationship """
-
-        datasets = self.datasets()
-        x = 'mhi_R'
-        y = 'Fnulled'
-        fig, axes = plt.subplots(1, len(datasets), figsize=(15,5))
-        for i, name in enumerate(datasets.keys()):
-            df = datasets[name]
-
-            sns.scatterplot(data=df, x=x, y=y,
-                color='black', s=10, alpha=0.2,
-                ax=axes[i]).set(xscale='log', yscale='log', title=name)
-            
-            sns.histplot(data=df, x=x, y=y,
-                bins=50, pthresh=.2, cmap="mako_r", alpha=0.6, ax=axes[i])
-
-
-    def plot_residuals(self, iden=None, query_key=None, nulled=False):
-        """ Plots residuals for given `iden` and `query_key` """
-        datasets = self.datasets()
-        if iden is None: iden = self.idens[-1]
-        datakeys = [query_key,] if query_key else datasets.keys()
-        fig, axes = plt.subplots(len(datakeys), 3, sharey=True, figsize=(20,5*len(datakeys)))
-        
-        for i, dk in enumerate(datakeys):
-            ax = axes[i] if len(datakeys) > 1 else axes
-            df = datasets[dk]
-            self.residual(df, iden=iden, resid='%sgbar' % iden, xlabel='Log(%s g)' % self.iden_labels[iden], ax=ax[0])
-            self.residual(df, iden=iden, resid='mhi_R', xlabel='Log(R/MHI)', ax=ax[1])
-            self.residual(df, iden=iden, resid='Fnulled', xlabel='Log(F nulled)', ax=ax[2])
-
-    def residual(self, df=None, resid='mhi_R', iden='V', ax=None, plot=True, **kwargs):
+    def residual(self, df=None, resid='Sgbar', iden='S', ax=None, plot=True, **kwargs):
         """ Plots a specific log residual """
         if df is None: df = self.dataframe
         
@@ -265,8 +232,9 @@ class Result:
             sns.lineplot(x=x, y=reg.slope*x+reg.intercept, color='red', ax=ax)
             g.axhline(y=0, color='grey', linestyle='dotted')
             g.set(ylabel='Log(Observed g)-Log(%s g)' % self.iden_labels[iden], **kwargs)
-        return reg
-
+            return g
+        else:
+            return reg
 
     def plot_comparison(self, compare=None, count=None, profiles=False, sharex=False):
         """

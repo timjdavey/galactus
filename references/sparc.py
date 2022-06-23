@@ -79,7 +79,7 @@ def adjustment_df(directory=DIR):
     sdf['Ybul'] = 0.7
     sdf['e_Ybul'] = 0.7*astro_scatter
     sdf['Ymass'] = 1.0
-    sdf['e_Ymass'] = 0.1
+    sdf['e_Ymass'] = 0.20
     sdf['Source'] = 'SPARC'
 
     # project the rotmass values onto it
