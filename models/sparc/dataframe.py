@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 
-from models.equations import velocity, sin, null_gravity, combined_force
+from models.equations import velocity, sin, combined_force
 from models.sparc.profile import MASS_RATIOS
 
 def augment_df(sim, adf=None, R=None, G=None):

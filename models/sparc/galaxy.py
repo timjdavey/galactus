@@ -6,8 +6,8 @@ from models.space import Space
 from models.galaxy import Galaxy
 
 
-def generate_galaxy(profile, space_points=300, calc_points=0, rot_fit=True,
-        rotmass_points=True, flat=True, zcut=10, ycut=1, excess_ratio=1.2, cp=None):
+def generate_galaxy(profile, space_points=300, calc_points=0, rot_fit=False,
+        rotmass_points=True, flat=True, zcut=2, ycut=1, excess_ratio=1.5, cp=None):
     """
     Generates a sparc galaxy given a profile
     """

@@ -5,7 +5,10 @@ from functools import cached_property, partial
 from .space import Space
 from .simulation import Simulation
 from .memory import memory_usage
+from models.equations import velocity
 
+GAMMA = 1e5
+ALPHA = 0.5
 
 class Galaxy(Simulation):
     """
@@ -36,3 +39,24 @@ class Galaxy(Simulation):
         #if R is None: R = 1
         df['rd'] = (scale*((df['y']-c[1])**2 + (df['x']-c[2])**2)**0.5)
         return df
+
+    def get_velocities(self, R=None):
+        """ Gets the velocities for a given set of data points """
+        # if want more accurate can just do without the +1 as well
+        # and when creating in `scalar_fit` rotmass_points(space, left=True)
+        cdf = self.dataframe()
+        if R is None: R = self.profile.rotmass_df['R']
+        return velocity(R, np.interp(R, cdf['rd'], cdf['x_vec']))
+
+    def generate_scalar_galaxy(self, points=None, gamma=GAMMA, alpha=ALPHA):
+        """ For a given scalar map galaxy,
+        generates a new Galaxy with the calculated at calculated `points` """
+        new_masses = self.mass_components*gamma/((self.scalar_map)**alpha)
+        new_galaxy = Galaxy(new_masses, self.space, mass_labels=self.mass_labels, cp=self.cp)
+        if points is None: points = self.profile.rotmass_points(self.space, left=True)
+        new_galaxy.analyse(points)
+        if hasattr(self, 'profile'): new_galaxy.profile = self.profile
+        return new_galaxy
+
+
+

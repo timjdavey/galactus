@@ -14,7 +14,3 @@ def combined_force(data, force_label, mass_labels, mass_ratios):
 def velocity(R, F):
     """ Velocity of a given R and F """
     return np.sign(F)*(np.abs(R*F)**0.5)
-
-def null_gravity(force, nulled, gamma, alpha, epsilon=0, tau=0):
-    """ The gravity force adjustment equation """
-    return gamma*force/(1+(((nulled+tau+epsilon)**alpha)))

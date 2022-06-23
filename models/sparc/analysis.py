@@ -1,11 +1,15 @@
-import pymc3 as pm
 import numpy as np
 import pandas as pd
+import pymc3 as pm
 import arviz as az
+import seaborn as sns
+import matplotlib.pyplot as plt
 from functools import cached_property
 
-from models.equations import velocity, combined_force, null_gravity
+from models.equations import velocity, combined_force
 from models.sparc.result import Result
+from references.sparc import adjustment_df
+
 
 class Analysis:
 
@@ -108,8 +112,7 @@ class Analysis:
         self.result = Result(adjustments=adjs, *args, **kwargs)
 
         # don't assume that there are universal params
-        if uni and self.null_function:
-            self.result.apply_prediction(uni, self.null_function)
+        self.result.apply_prediction(uni)
 
         return self.result
 
@@ -119,5 +122,50 @@ class Analysis:
         corner.corner(self.trace)
 
 
+    def plot_nuissance(self, source='SPARC',
+            ylims={'Inc': (0,100), 'D': (-10,None), 'Ymass': (0,2)},
+            ylabels={'Inc': 'Inclination (Degrees)', 'D': 'Distance (Mpc)', 'Ymass': 'Mass/Luminosity adjustment'},
+            xlabel="Galaxy in order of SPARC reference parameter value",
+            title="Nuisance parameters"):
 
+        adjs, params = self.adjs, self.params_galaxy
+        
+        # clean data
+        fig, axes = plt.subplots(len(params), 1, figsize=(20,10))
+        if len(params) == 1: axes = [axes]
+        def_adjs = adjustment_df()
+        select_params = ['Galaxy']
+        for p in params:
+            select_params.append('e_%s' % p)
+            select_params.append(p)
+        
+        # create single reference dataframe
+        joined = adjs.set_index("Galaxy").join(def_adjs.query("Source=='%s'" % source)[select_params].set_index('Galaxy'), rsuffix='_sparc').reset_index()
+        
+        for i, p in enumerate(params):
+            # sort data into ascending
+            joined = joined.sort_values('%s_sparc' % p)
+            galaxy = joined['Galaxy']
+            adjustment = joined[p]
+            sparc = joined['%s_sparc' % p]
+            error = joined['e_%s_sparc' % p]
+            
+            # source reference
+            g = sns.lineplot(x=galaxy, y=sparc, ax=axes[i], linestyle='dashed', color='lightgrey')
+            g.fill_between(galaxy, sparc-error*2, sparc+error*2, color='whitesmoke')
+            g.fill_between(galaxy, sparc-error, sparc+error, color='lightgrey')
+            
+            # labels
+            g.set(xlabel=None, xticks=[])
+            if i == 0: g.set(title=title)
+            if p in ylabels: g.set(ylabel=ylabels[p])
+            if p in ylims: g.set(ylim=ylims[p])
+            
+            # nuisance points
+            g.errorbar(x=galaxy, y=adjustment, yerr=adjs['e_%s' % p], fmt='.k')
+            
+        
+        # only want on final
+        g.set(xlabel=xlabel)
+        return g
 

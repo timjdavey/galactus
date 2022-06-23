@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from models.load import load_sparc
 from models.sparc.dataframe import augment_df
 from models.sparc.profile import COLOR_SCHEME
-from models.equations import velocity, null_gravity
+from models.equations import velocity
 
 threshold_label = 'Threshold'
 
@@ -35,7 +35,7 @@ class Result:
     """
 
     def __init__(self, simulations, adjustments=None, queries_strs=DEBUG, iden_labels=IDENS,
-                threshold=0.1, idens=('V','S')):
+                threshold=0.1, idens=('S')):
 
         dfs = []
         for name, sim in simulations.items():
@@ -160,7 +160,7 @@ class Result:
 
         height = len(datakeys)
         width = len(idens)
-        fig, axes = plt.subplots(height, width, sharex=True, sharey=True, figsize=(20,10*height))
+        fig, axes = plt.subplots(height, width, sharex=True, sharey=True, figsize=(10,10*height))
 
         # plot filter queries on each row
         for row, name in enumerate(datakeys):
@@ -169,7 +169,8 @@ class Result:
 
             # plot references on each column
             for col, iden in enumerate(idens):
-                ax = axrow[col]
+                ax = axrow[col] if len(idens) > 1 else axrow
+
                 if velocity:
                     x, y = '%sbar' % iden, 'Vobs'
                     lx, ly = np.log10(df[x]), np.log10(df[y])
@@ -211,6 +212,7 @@ class Result:
 
                 sns.lineplot(x=line, y=line, color='grey', ax=ax, linestyle='dotted')
                 g.set(xlabel=xlabel, ylabel=ylabel)
+        return g
         
     def plot_rars(self, *args, **kwargs):
         """ Plots all the rar plots. Similar to a QQ plot """
@@ -235,6 +237,14 @@ class Result:
             return g
         else:
             return reg
+
+    def residual_hist(self, query='rel_R > 0.2 & rel_R < 0.8', resid='Sgbar'):
+        """ Plots the histogram of the residual """
+        df = self.dataframe
+        if query: df = df.query(query)
+        data = np.log10(df['gobs']/(df[resid]))
+        g = sns.histplot(data)
+        return g, data
 
     def plot_comparison(self, compare=None, count=None, profiles=False, sharex=False):
         """
@@ -289,13 +299,10 @@ class Result:
             
             if count and i == count-1: return
     
-    def apply_prediction(self, params, null_function=null_gravity, iden='P'):
+    def apply_prediction(self, params):
         # once you've done the adjustments via inputting it into a Results object
         # this will update the mass ratios, R etc for us
         # so can safely use here
-        predicted_force = null_function(self.dataframe['Fnewton'], self.dataframe['Fnulled'],
-            # always pass tau, as add as zero
-            tau=self.dataframe['tau'], **params)
-        self.dataframe['%sgbar' % iden] = predicted_force
-        self.dataframe['%sbar' % iden] = velocity(self.dataframe['R'], predicted_force)
-        self.idens = ('V','S',iden)
+        self.dataframe['Fnewton'] *= params['gamma']
+        self.dataframe['Sgbar'] *= params['gamma']
+        self.dataframe['Sbar'] = velocity(self.dataframe['R'], self.dataframe['Sgbar'])
