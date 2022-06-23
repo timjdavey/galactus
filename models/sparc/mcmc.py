@@ -3,7 +3,7 @@ import theano.tensor as at
 import pandas as pd
 import numpy as np
 
-TIGHT = {'Inc': 1.5, 'D': 3, 'Ymass': 16}
+TIGHT = {'Inc': 1.3, 'D': 3, 'Ymass': 15}
 
 def mcmc(df, train_y=True, train_inc=True, train_d=True, tight=None):
 
