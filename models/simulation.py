@@ -6,7 +6,7 @@ import pandas as pd
 import seaborn as sns
 import itertools
 import matplotlib.pyplot as plt
-from functools import cached_property, partial
+from functools import cached_property
 from multiprocessing import Pool, cpu_count
 from matplotlib.colors import LogNorm
 from .space import Space
@@ -15,8 +15,18 @@ from .memory import memory_usage
 Gkg = 6.67430*(10**-11) # m3 kg-1 s-2
 Gsolar = 4.30091*(10**-6) # kpc Ms-1 (km/s)2
 
+
+global_masses, global_scale = None, None
+
+def initializer(init_masses, init_scale):
+    global global_masses
+    global global_scale
+    global_masses, global_scale = init_masses, init_scale
+
+def gravity_wrapper(position):
+    return gravity_worker(position, global_masses, global_scale)
+
 def gravity_worker(position, masses, scale):
-    
     # matrix of distances in indices space from position
     indices = np.indices(masses.shape[1:])
     deltas = np.array([(indices[i]-c)*scale for i, c in enumerate(position)])
@@ -39,7 +49,7 @@ def gravity_worker(position, masses, scale):
         F_vec = [np.sum(arr) for arr in F_comp] # np.sum(np.sum(np.sum(F_norm, axis=1), axis=1), axis=1)
         F_scalar = np.sum(np.linalg.norm(F_comp, axis=0))
         results.append([F_vec, F_scalar])
-    return results
+    return (position, results)
 
 
 class Simulation:
@@ -63,7 +73,7 @@ class Simulation:
         self.results = {}
         self.fit_ratios = {}
 
-    def analyse(self, sub_list=None, verbose=True):
+    def analyse(self, sub_list=None, verbose=True, processes=8):
         """
         Does the main bulk of the analysis
 
@@ -90,16 +100,16 @@ class Simulation:
         tic = time.perf_counter()
         point_list = self.space.list if sub_list is None else sub_list
         tasks = self.space.count if sub_list is None else len(sub_list)
+        count = 0
 
-        for count, p in enumerate(point_list):
-            if p not in self.results:
-                r = gravity_worker(p, self.mass_components, self.space.scale)
-                if verbose:
-                    self.log("%s of %s completed" % (count, tasks))
+        # if doing the whole space, use chunksize, otherwise keep it lean and mean
+        chunksize = tasks//(processes**2) + 1
+
+        with Pool(processes, initializer, (self.mass_components, self.space.scale)) as pool:
+            for p, r in pool.imap_unordered(gravity_wrapper, point_list, chunksize):
+                if verbose: self.log("%s of %s completed %s" % (count, tasks, memory_usage()))
                 self.results[p] = r
-            else:
-                if verbose:
-                    self.log("%s of ignored as already completed" % (count))
+                count += 1
         
         toc = time.perf_counter()
         self.log("completed in %.2f seconds" % (toc-tic))

@@ -238,7 +238,8 @@ class SparcMassProfile:
         else:
             # could do minor speed up, by cutting it into 4 equal segments, but harder to do ycut
             # and only need to do this once per galaxy (not fitting using this code)
-            sim.analyse()
+            # Turning off output as there's 45k points
+            sim.analyse(verbose=False)
             
             if save:
                 np.save(filename, sim.scalar_map)

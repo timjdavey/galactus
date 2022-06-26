@@ -221,29 +221,30 @@ class Result:
             self.plot_rar(kind=i, *args, **kwargs)
 
 
-    def residual(self, df=None, resid='Sgbar', iden='S', ax=None, plot=True, **kwargs):
+    def residual(self, df=None, resid='Sgbar', ax=None, plot=True, **kwargs):
         """ Plots a specific log residual """
         if df is None: df = self.dataframe
         
-        y = np.log10(df['gobs']) - np.log10(df['%sgbar' % iden])
+        y = np.log10(df['gobs']/df[resid])
         x = np.log10(df[resid])
         reg = sp.stats.linregress(x, y)
 
         if plot:
-            g = sns.histplot(x=x, y=y, bins=30, pthresh=.01, cmap="Blues", ax=ax)
-            sns.lineplot(x=x, y=reg.slope*x+reg.intercept, color='red', ax=ax)
+            g = sns.histplot(x=x, y=y, bins=50, pthresh=.01, cmap="Blues", ax=ax)
+            sns.lineplot(x=x, y=reg.slope*x+reg.intercept, color='red', linestyle='dashed', ax=ax)
             g.axhline(y=0, color='grey', linestyle='dotted')
-            g.set(ylabel='Log(Observed g)-Log(%s g)' % self.iden_labels[iden], **kwargs)
+            g.set(ylabel='Residuals [dex]', **kwargs)
             return g
         else:
             return reg
 
-    def residual_hist(self, query='rel_R > 0.2 & rel_R < 0.8', resid='Sgbar'):
+    def residual_hist(self, query='rel_R > 0.2 & rel_R < 0.8', resid='Sgbar', bins=100):
         """ Plots the histogram of the residual """
         df = self.dataframe
         if query: df = df.query(query)
         data = np.log10(df['gobs']/(df[resid]))
-        g = sns.histplot(data)
+        g = sns.histplot(data, bins=bins)
+        g.set(xlabel='Residuals [dex]', ylabel='Measurements')
         return g, data
 
     def plot_comparison(self, compare=None, count=None, profiles=False, sharex=False):
