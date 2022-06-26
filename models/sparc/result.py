@@ -9,19 +9,21 @@ from models.sparc.dataframe import augment_df
 from models.sparc.profile import COLOR_SCHEME
 from models.equations import velocity
 
-threshold_label = 'Threshold'
 
-DEBUG = {
+ANALYSIS = {
     'Everything': 'R>0',
-    threshold_label: 'VSdiffabs<%s',
     'Quality': 'Q<3 & Inc<80 & Inc>20',
-    'Quality_%s' % threshold_label: 'VSdiffabs<%s & Q<3 & Inc<80 & Inc>20',
-    'Anti_%s' % threshold_label: 'VSdiffabs>%s',
+    'High Quality': 'Q<1 & rel_R>0.15 & rel_R<0.9',
 }
 
-ANALYSIS = {}
-ANALYSIS[threshold_label] = DEBUG[threshold_label]
-ANALYSIS['Quality_%s' % threshold_label] = DEBUG['Quality_%s' % threshold_label]
+
+threshold_label = 'Threshold'
+
+DEBUG = ANALYSIS.copy()
+DEBUG[threshold_label] = 'VSdiffabs<%s'
+DEBUG['Quality_%s' % threshold_label] = 'VSdiffabs<%s & Q<3 & Inc<80 & Inc>20'
+DEBUG['Anti_%s' % threshold_label] = 'VSdiffabs>%s'
+
 
 IDENS = {
     'V': 'Lelli',
@@ -34,7 +36,7 @@ class Result:
     Wrapper class to do basic analysis on the whole SPARC set of results.
     """
 
-    def __init__(self, simulations, adjustments=None, queries_strs=DEBUG, iden_labels=IDENS,
+    def __init__(self, simulations, adjustments=None, queries_strs=ANALYSIS, iden_labels=IDENS,
                 threshold=0.1, idens=('S')):
 
         dfs = []
@@ -147,7 +149,7 @@ class Result:
         sns.ecdfplot(data=pd.concat(dfs, ignore_index=True), x='VSdiffabs', hue='set', linestyle='dotted', ax=axes)
 
 
-    def plot_rar(self, kind=0, idens=None, query_key='Everything', title=None, line=[1,6], velocity=False):
+    def plot_rar(self, kind=0, idens=None, query_key=None, title=None, line=[1,6], velocity=False):
         """
         Plots various 
         kind == 0 is density plot
@@ -238,12 +240,11 @@ class Result:
         else:
             return reg
 
-    def residual_hist(self, query='rel_R > 0.2 & rel_R < 0.8', resid='Sgbar', bins=100):
+    def residual_hist(self, query_key=None, resid='Sgbar', bins=100, color=None):
         """ Plots the histogram of the residual """
-        df = self.dataframe
-        if query: df = df.query(query)
+        df = df.datasets()[query_key] if query_key else self.dataframe
         data = np.log10(df['gobs']/(df[resid]))
-        g = sns.histplot(data, bins=bins)
+        g = sns.histplot(data, bins=bins, color=color)
         g.set(xlabel='Residuals [dex]', ylabel='Measurements')
         return g, data
 

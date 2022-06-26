@@ -29,26 +29,25 @@ def gravity_wrapper(position):
 def gravity_worker(position, masses, scale):
     # matrix of distances in indices space from position
     indices = np.indices(masses.shape[1:])
-    deltas = np.array([(indices[i]-c)*scale for i, c in enumerate(position)])
-
-    # r^2 for Force formula
-    r2 = np.sum(deltas**2, axis=0)
+    r_vec = np.array([(indices[i]-c)*scale for i, c in enumerate(position)])
+    
+    # |r|^2 square the norm
+    # convert that to r^3 to normalise vectors in each axis
+    r3 = np.sum(r_vec**2, axis=0)**1.5
     # handle the divide by zero error for position
     try:
-        r2[tuple(position)] = 1e6
+        r3[tuple(position)] = 1e6
     except IndexError:
         pass # if out of bounds
 
-    # convert that to r^3 to normalise vectors in each axis
-    r3 = r2**1.5
-
     results = []
     for mass in masses:
-        F_comp = -mass*deltas/r3
+        F_comp = -mass*r_vec/r3
         # creates F_vec for z,y,x (or flexible num of dimensions)
         F_vec = [np.sum(arr) for arr in F_comp] # np.sum(np.sum(np.sum(F_norm, axis=1), axis=1), axis=1)
         F_scalar = np.sum(np.linalg.norm(F_comp, axis=0))
-        results.append([F_vec, F_scalar])
+        Potential = np.sum(np.linalg.norm(F_comp*r_vec, axis=0))
+        results.append([F_vec, F_scalar, Potential])
     return (position, results)
 
 
@@ -150,8 +149,8 @@ class Simulation:
                 for di, v in enumerate(mass_res[0]):
                     rr["%s_vec" % self.dimensions[di]] = v*G*mass_ratios[component]
 
-                # scalar
-                rr['F_scalar'] = mass_res[-1]*G*mass_ratios[component]
+                rr['F_scalar'] = mass_res[1]*G*mass_ratios[component]
+                rr['F_potential'] = mass_res[2]*G*mass_ratios[component]
                 data.append(rr)
         
         df = pd.DataFrame(data)
