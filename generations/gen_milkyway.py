@@ -24,8 +24,8 @@ if __name__ == '__main__':
         (20, 25),
         (10, radius),
     ]
-    for calc_points, calc_radius in point_sections:
-        sim.analyse(sim.radius_points(calc_radius, calc_points))
+    #for calc_points, calc_radius in point_sections:
+    #    sim.analyse(sim.radius_points(calc_radius, calc_points))
     
     # earth interp
     space = sim.space

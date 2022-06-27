@@ -12,8 +12,14 @@ from models.equations import velocity
 
 ANALYSIS = {
     'Everything': 'R>0',
-    'Quality': 'Q<3 & Inc<80 & Inc>20',
-    'High Quality': 'Q<1 & rel_R>0.15 & rel_R<0.9',
+    'Quality data': 'Q<2 & Inc<80 & Inc>20',
+    'Quality simulation': 'Q<2 & Inc<80 & Inc>20 & rel_R>0.15 & rel_R<0.9',
+}
+
+COLORS = {
+    'Everything': 'yellow',
+    'Quality data': 'orange',
+    'Quality simulation': 'red',
 }
 
 
@@ -149,7 +155,7 @@ class Result:
         sns.ecdfplot(data=pd.concat(dfs, ignore_index=True), x='VSdiffabs', hue='set', linestyle='dotted', ax=axes)
 
 
-    def plot_rar(self, kind=0, idens=None, query_key=None, title=None, line=[1,6], velocity=False):
+    def plot_rar(self, kind=0, idens=None, query_key=None, title=None, line=[1,6], velocity=False, color=None, label=None, axis=None):
         """
         Plots various 
         kind == 0 is density plot
@@ -171,7 +177,10 @@ class Result:
 
             # plot references on each column
             for col, iden in enumerate(idens):
-                ax = axrow[col] if len(idens) > 1 else axrow
+                if axis is None:
+                    ax = axrow[col] if len(idens) > 1 else axrow
+                else:
+                    ax = axis
 
                 if velocity:
                     x, y = '%sbar' % iden, 'Vobs'
@@ -207,7 +216,12 @@ class Result:
                     g = sns.histplot(x=lx, y=ly,
                         bins=30, cmap="Blues", alpha=1.0, ax=ax)
                     g = sns.regplot(x=lx, y=ly, scatter=False, ax=ax, color='red')
-                    
+                
+                # for overlay plots
+                elif kind == 4:
+                    g = sns.scatterplot(data=df, x=lx, y=ly,
+                        alpha=1.0, s=2, color=color, label=label, ax=ax)
+
                 # title (dataset), reference line, labels
                 if col == 0:
                     g.set(title=title if title else name)
@@ -240,13 +254,20 @@ class Result:
         else:
             return reg
 
-    def residual_hist(self, query_key=None, resid='Sgbar', bins=100, color=None):
+    def residual_hist(self, query_key=None, resid='Sgbar', bins=100, color=None, label=None):
         """ Plots the histogram of the residual """
-        df = df.datasets()[query_key] if query_key else self.dataframe
+        df = self.datasets()[query_key] if query_key else self.dataframe
         data = np.log10(df['gobs']/(df[resid]))
-        g = sns.histplot(data, bins=bins, color=color)
+        g = sns.histplot(data, bins=bins, color=color, label=label)
         g.set(xlabel='Residuals [dex]', ylabel='Measurements')
         return g, data
+
+    def residual_hists(self):
+        """ Plots all the histograms for all query keys on a single plot """
+        outputs = {}
+        for k, v in self.queries_strs.items():
+            outputs[k] = self.residual_hist(k, color=COLORS[k], label=k)
+        return outputs
 
     def plot_comparison(self, compare=None, count=None, profiles=False, sharex=False):
         """

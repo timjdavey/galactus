@@ -34,7 +34,7 @@ def gravity_worker(position, masses, scale):
     # |r|^2 square the norm
     # convert that to r^3 to normalise vectors in each axis
     r3 = np.sum(r_vec**2, axis=0)**1.5
-    # handle the divide by zero error for position
+    # handle the divide by zero error for it's current position
     try:
         r3[tuple(position)] = 1e6
     except IndexError:
@@ -115,9 +115,16 @@ class Simulation:
     
     @cached_property
     def scalar_map(self):
+        return self.surface_map(1)
+
+    @cached_property
+    def potential_map(self):
+        return self.surface_map(2)
+
+    def surface_map(self, index, mass_component=0):
         smap = self.space.blank()
         for point, vals in self.results.items():
-            smap[point] = vals[0][1] # the scalar returned
+            smap[point] = vals[mass_component][index]
         return smap
 
     def dataframe(self, mass_ratios=False, G=None, combined=False):
@@ -150,7 +157,7 @@ class Simulation:
                     rr["%s_vec" % self.dimensions[di]] = v*G*mass_ratios[component]
 
                 rr['F_scalar'] = mass_res[1]*G*mass_ratios[component]
-                rr['F_potential'] = mass_res[2]*G*mass_ratios[component]
+                if len(mass_res) > 2: rr['G_potential'] = mass_res[2]*G*mass_ratios[component]
                 data.append(rr)
         
         df = pd.DataFrame(data)
@@ -164,10 +171,12 @@ class Simulation:
 
     def combine_masses(self, mrs=None):
         """ Combines the mass components into a single mass, to speed up analysis of large spaces """
-        if mrs is None:
-            self.mass_components = np.array([np.sum(self.mass_components, axis=0),])
+        if mrs is None and fit_ratios:
+            mrs = self.fit_ratios
         else:
-            self.mass_components = np.array([np.sum([c*mrs[self.mass_labels[i]] for i, c in enumerate(self.mass_components)], axis=0),])
+            mrs = dict([(l, 1) for l in self.mass_labels])
+
+        self.mass_components = np.array([np.sum([c*mrs[self.mass_labels[i]] for i, c in enumerate(self.mass_components)], axis=0),])
 
         self.mass_components.flags.writeable = False
         self.mass_labels = ['combined',]

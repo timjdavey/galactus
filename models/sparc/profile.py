@@ -204,7 +204,8 @@ class SparcMassProfile:
                     m = np.interp(r, R, data)*scale*np.exp(-z/scale_height)
                 elif label == 'bul':
                     # projects as sphere
-                    m = np.interp(r+z, R, data)*scale*np.exp(-(r+z)/2)
+                    dist = (r**2+z**2)**0.5
+                    m = np.interp(dist, R, data)*scale*np.exp(-dist/2)
                 elif label == 'gas':
                     # do not project gas
                     # just keep as flat in centre
@@ -217,23 +218,31 @@ class SparcMassProfile:
         
         return np.array(masses), list(dc.keys()) 
 
-    def generate_scalar_map_galaxy(self, space_points=300, ycut=2, excess_ratio=1.5, cp=None, save=False, load=False, DIR='generations/'):
+    def generate_maps(self, space_points=300, ycut=2, z=1, excess_ratio=1.5, cp=None, save=False, load=False, DIR='generations/'):
         """ Creates a scalar map galaxy! """
         # nice small flat space
-        space = Space((1,space_points//ycut,space_points), self.max_r*2*excess_ratio/space_points)
+        space = Space((z,space_points//ycut,space_points), self.max_r*2*excess_ratio/space_points)
         masses, labels = self.masses(space)
         
         sim = Galaxy(masses, space, mass_labels=labels, cp=cp)
         sim.profile = self
 
-        # combine masses using 0.5, 0.7, 1.0 ratios (these are now fixed)
-        sim.combine_masses(MASS_RATIOS)
+        # if not flat
+        if z > 1:
+            sim.analyse(self.rotmass_points(space))
+            fits = self.fit_simulation(sim)
+            sim.combine_masses(fits)
+        else:
+            # combine masses using 0.5, 0.7, 1.0 ratios (these are now fixed)
+            sim.combine_masses(MASS_RATIOS)
 
-        filename = '%sscalar_map_%s_%s_%s' % (DIR, space_points, ycut, self.uid)
+        filename = lambda k: "_".join((DIR, k, str(space_points), str(ycut), str(z), self.uid))
         
         if load:
-            sim.scalar_map = np.load(filename+'.npy')
+            sim.scalar_map = np.load(filename('scalar')+'.npy')
             sim.scalar_map.flags.writeable = False
+            sim.potential_map = np.load(filename('potential')+'.npy')
+            sim.potential_map.flags.writeable = False
             return sim
         else:
             # could do minor speed up, by cutting it into 4 equal segments, but harder to do ycut
@@ -242,7 +251,8 @@ class SparcMassProfile:
             sim.analyse(verbose=False)
             
             if save:
-                np.save(filename, sim.scalar_map)
+                np.save(filename('scalar'), sim.scalar_map)
+                np.save(filename('potential'), sim.potential_map)
             return sim
 
 
