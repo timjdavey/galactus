@@ -7,8 +7,8 @@ from .simulation import Simulation
 from .memory import memory_usage
 from models.equations import velocity
 
-GAMMA = 1e5
-ALPHA = 0.5
+SCALAR_SOLAR = 8500 # kms-1
+TAU = 0.00000037 # kms-1
 
 class Galaxy(Simulation):
     """
@@ -48,17 +48,13 @@ class Galaxy(Simulation):
         if R is None: R = self.profile.rotmass_df['R']
         return velocity(R, np.interp(R, cdf['rd'], cdf['x_vec']))
 
-    def generate_scalar_galaxy(self, points=None, gamma=GAMMA, alpha=ALPHA, potential=False):
-        """ For a given scalar map galaxy,
-        generates a new Galaxy with the calculated at calculated `points` """
-        if potential:
-            new_masses = self.mass_components*gamma/((1+self.potential_map)**alpha)
-        else:
-            new_masses = self.mass_components*gamma/((1+self.scalar_map)**alpha)
-
+    def smog_convert(self, tau=TAU, reference_scalar=SCALAR_SOLAR, analyse=True):
+        """
+        For a given scalar map galaxy,
+        generates a new Galaxy with the calculated at calculated `points`
+        """
+        new_masses = self.mass_components*np.sqrt(1+reference_scalar/tau)/np.sqrt(1+self.scalar_map()/tau)
         new_galaxy = Galaxy(new_masses, self.space, mass_labels=self.mass_labels, cp=self.cp)
-        if points is None: points = self.profile.rotmass_points(self.space, left=True)
-        new_galaxy.analyse(points)
         if hasattr(self, 'profile'): new_galaxy.profile = self.profile
         return new_galaxy
 

@@ -44,10 +44,9 @@ def gravity_worker(position, masses, scale):
     for mass in masses:
         F_comp = -mass*r_vec/r3
         # creates F_vec for z,y,x (or flexible num of dimensions)
-        F_vec = [np.sum(arr) for arr in F_comp] # np.sum(np.sum(np.sum(F_norm, axis=1), axis=1), axis=1)
+        F_vec = [np.sum(arr) for arr in F_comp]
         F_scalar = np.sum(np.linalg.norm(F_comp, axis=0))
-        Potential = np.sum(np.linalg.norm(F_comp*r_vec, axis=0))
-        results.append([F_vec, F_scalar, Potential])
+        results.append([F_vec, F_scalar])
     return (position, results)
 
 
@@ -112,22 +111,28 @@ class Simulation:
         
         toc = time.perf_counter()
         self.log("completed in %.2f seconds" % (toc-tic))
-    
-    @cached_property
-    def scalar_map(self):
-        return self.surface_map(1)
 
-    @cached_property
-    def potential_map(self):
-        return self.surface_map(2)
-
-    def surface_map(self, index, mass_component=0):
+    def scalar_map(self, mass_component=0, infer=True):
         smap = self.space.blank()
-        for point, vals in self.results.items():
-            smap[point] = vals[mass_component][index]
+        if infer:
+            # works around space for each z value
+            # since interp is only 1d
+            r, _ = self.space.rz()
+            flatr = r[0]
+            R = [r[p] for p in self.space.radius_list(0)]
+            for z in range(self.space.points[0]):
+                S = [self.results[p][mass_component][1] for p in self.space.radius_list(z)]
+                smap[z] = np.interp(flatr, R, S, right=0)
+        else:
+            for point, vals in self.results.items():
+                smap[point] = vals[mass_component][1]
         return smap
 
     def dataframe(self, mass_ratios=False, G=None, combined=False):
+
+        if len(self.results) == 0:
+            raise ValueError("No results yet, please run analyse")
+
         # So can override G
         if G is None:
             G = self.G
@@ -153,11 +158,10 @@ class Simulation:
                 rr['component'] = component
                 
                 # for each of the masses
-                for di, v in enumerate(mass_res[0]):
-                    rr["%s_vec" % self.dimensions[di]] = v*G*mass_ratios[component]
+                for dim, value in enumerate(mass_res[0]):
+                    rr["%s_vec" % self.dimensions[dim]] = value*G*mass_ratios[component]
 
                 rr['F_scalar'] = mass_res[1]*G*mass_ratios[component]
-                if len(mass_res) > 2: rr['G_potential'] = mass_res[2]*G*mass_ratios[component]
                 data.append(rr)
         
         df = pd.DataFrame(data)
@@ -171,9 +175,7 @@ class Simulation:
 
     def combine_masses(self, mrs=None):
         """ Combines the mass components into a single mass, to speed up analysis of large spaces """
-        if mrs is None and fit_ratios:
-            mrs = self.fit_ratios
-        else:
+        if mrs is None:
             mrs = dict([(l, 1) for l in self.mass_labels])
 
         self.mass_components = np.array([np.sum([c*mrs[self.mass_labels[i]] for i, c in enumerate(self.mass_components)], axis=0),])

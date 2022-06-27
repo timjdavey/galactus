@@ -218,49 +218,12 @@ class SparcMassProfile:
         
         return np.array(masses), list(dc.keys()) 
 
-    def generate_maps(self, space_points=300, ycut=2, z=1, excess_ratio=1.5, cp=None, save=False, load=False, DIR='generations/'):
-        """ Creates a scalar map galaxy! """
-        # nice small flat space
-        space = Space((z,space_points//ycut,space_points), self.max_r*2*excess_ratio/space_points)
-        masses, labels = self.masses(space)
-        
-        sim = Galaxy(masses, space, mass_labels=labels, cp=cp)
-        sim.profile = self
-
-        # if not flat
-        if z > 1:
-            sim.analyse(self.rotmass_points(space))
-            fits = self.fit_simulation(sim)
-            sim.combine_masses(fits)
-        else:
-            # combine masses using 0.5, 0.7, 1.0 ratios (these are now fixed)
-            sim.combine_masses(MASS_RATIOS)
-
-        filename = lambda k: "_".join((DIR, k, str(space_points), str(ycut), str(z), self.uid))
-        
-        if load:
-            sim.scalar_map = np.load(filename('scalar')+'.npy')
-            sim.scalar_map.flags.writeable = False
-            sim.potential_map = np.load(filename('potential')+'.npy')
-            sim.potential_map.flags.writeable = False
-            return sim
-        else:
-            # could do minor speed up, by cutting it into 4 equal segments, but harder to do ycut
-            # and only need to do this once per galaxy (not fitting using this code)
-            # Turning off output as there's 45k points
-            sim.analyse(verbose=False)
-            
-            if save:
-                np.save(filename('scalar'), sim.scalar_map)
-                np.save(filename('potential'), sim.potential_map)
-            return sim
-
 
     def fit_simulation(self, simulation):
         """ Fits a simulation to the Lelli mass model velocity components
         For 3D projections this is needed only """
         
-        fits = {}
+        fits = {'gas': 1}
         x_points = self.rotmass_x(simulation.space)+1
         
         for i, component in enumerate(self.fit_components):

@@ -42,10 +42,19 @@ class Space:
         """ The distances of x-axis for use with graphs mostly """
         return (self.coords[-1]-self.center[2])*self.scale
 
-    @cached_property
-    def radius_list(self):
+    def radius_list(self, z=None):
         """ A list of all coords on the radius of a galaxy """
-        return [(self.center[0],self.center[1],i) for i in self.coords[2][int(self.points[2]/2):]]
+        if z is None: self.center[0]
+        return [(z,self.center[1],i) for i in self.coords[2][self.points[2]//2:]]
+
+    @cached_property
+    def slice_list(self):
+        """ Same as radius_list but includes z-axis """
+        points = []
+        for z in range(self.points[0]):
+            for p in self.radius_list(z):
+                points.append(p)
+        return points
 
     @cached_property
     def list_mesh(self):
