@@ -11,6 +11,10 @@ class Space:
         self.points = points
         self.scale = scale
 
+    @property
+    def is_even(self):
+        return self.points[0] % 2 == 0 or self.points[1] % 2 == 0
+
     def blank(self):
         """ An empty array of dimensions of space """
         return np.zeros(self.points)#, dtype=np.dtype('float32'))
@@ -42,24 +46,24 @@ class Space:
         """ The distances of x-axis for use with graphs mostly """
         return (self.coords[-1]-self.center[2])*self.scale
 
-    def radius_list(self, z=None):
+    @cached_property
+    def radius_list(self):
         """ A list of all coords on the radius of a galaxy """
-        if z is None: self.center[0]
-        return [(z,self.center[1],i) for i in self.coords[2][self.points[2]//2:]]
+        return [(self.center[0],self.center[1],i) for i in self.coords[2][self.points[2]//2:]]
 
-    @cached_property
-    def slice_list(self):
-        """ Same as radius_list but includes z-axis """
-        points = []
-        for z in range(self.points[0]):
-            for p in self.radius_list(z):
-                points.append(p)
-        return points
-
-    @cached_property
-    def list_mesh(self):
+    def list_mesh(self, coords=None):
         """ A list of all coords """
-        return np.array(np.meshgrid(*self.coords)).T.reshape(-1,len(self.points))
+        if coords is None: coords = self.coords
+        return np.array(np.meshgrid(*coords)).T.reshape(-1,len(self.points))
+
+    @cached_property
+    def symmetric_points(self):
+        xy = list(itertools.combinations_with_replacement(range(self.center[1]+1),2))
+        arr = []
+        for z in range(self.center[0]+1):
+            for p in xy:
+                arr.append(tuple([z, p[0], p[1]]))
+        return arr
 
     @property
     def list(self):

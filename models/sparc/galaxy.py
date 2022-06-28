@@ -14,6 +14,7 @@ def generate_galaxy(profile, space_points=300, z=1, excess_ratio=1.5, calc_point
     Generates a sparc galaxy given a profile
     """
     uid = profile.uid
+
     space = Space((z,space_points,space_points), profile.max_r*2*excess_ratio/space_points)
     masses, labels = profile.masses(space)
     
@@ -33,7 +34,7 @@ def generate_galaxy(profile, space_points=300, z=1, excess_ratio=1.5, calc_point
     return sim
 
 
-def galaxy_scalar_map(profile, space_points=300, z=1, excess_ratio=1.5, cp=None, load=False, save=False, DIR='generations/'):
+def galaxy_scalar_map(profile, space_points=300, z=1, excess_ratio=1.5, cp=None, fast=True, load=False, save=False, DIR='generations/'):
     """
     Creates a scalar map galaxy
     """
@@ -54,7 +55,12 @@ def galaxy_scalar_map(profile, space_points=300, z=1, excess_ratio=1.5, cp=None,
             # otherwise combine masses using 0.5, 0.7, 1.0 ratios
             sim.combine_masses(MASS_RATIOS)
         
-        sim.analyse(sim.space.slice_list)
+        if fast:
+            # do for slice & infer in galaxy_smog
+            sim.analyse(sim.space.symmetric_points)
+        else:
+            # otherwise calculate for all points
+            sim.analyse()
 
         if save:
             # ironically need to save masses to avoid having to do
@@ -68,16 +74,17 @@ def galaxy_smog(mapsim, tau=None, reference=None, analyse=True):
     For a given scalar map galaxy,
     generates a new Galaxy with the calculated at calculated `points`
     """
-    adjusted_masses = mapsim.mass_components*smog(mapsim.scalar_map(), tau, reference)
+    smap = mapsim.scalar_map()
+    adjusted_masses = mapsim.mass_components*smog(smap, tau, reference)
     new_galaxy = Galaxy(adjusted_masses, mapsim.space, mass_labels=mapsim.mass_labels, cp=mapsim.cp)
     return new_galaxy
 
 
-def save_smog(profile, points, z, filename, save_masses=False):
+def save_smog(profile, points, z, filename, fast=True, save_masses=False):
     """
     For a given profile, generate and save
     """
-    scalar_map_sim = galaxy_scalar_map(profile, points, z)
+    scalar_map_sim = galaxy_scalar_map(profile, points, z, fast=fast)
     sim = galaxy_smog(scalar_map_sim)
     sim.profile = profile
     sim.analyse(profile.rotmass_points(sim.space, left=True))

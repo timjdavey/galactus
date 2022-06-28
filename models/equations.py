@@ -20,6 +20,6 @@ def velocity(R, F):
 
 def smog(scalar, tau=None, reference=None):
     """ The smog adjustment, for reference frame """
-    if tau is None: tau = TAU
+    if tau is None: tau = 1#TAU
     if reference is None: reference = SCALAR_SOLAR
-    return np.sqrt((1+reference*tau)/(1+scalar*tau))
+    return 1e5/np.sqrt(1+scalar)#np.sqrt((1+reference*tau)/(1+scalar*tau))

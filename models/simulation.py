@@ -56,7 +56,11 @@ class Simulation:
     """
     dimensions = ('z','y','x')
 
-    def __init__(self, masses, space, mass_labels=None, G=Gsolar, cp=None):
+    def __init__(self, masses, space, mass_labels=None, G=Gsolar, cp=None, ignore_odd=False):
+
+        if space.is_even and not ignore_odd:
+            raise ValueError("Space %s is not odd. For cleaner results, make sure it is." % str(space.points))
+
         if isinstance(masses, list): masses = np.array(masses)
         masses.flags.writeable = False # makes masses a constant
         self.mass_components = masses
@@ -112,20 +116,23 @@ class Simulation:
         toc = time.perf_counter()
         self.log("completed in %.2f seconds" % (toc-tic))
 
-    def scalar_map(self, mass_component=0, infer=True):
+    def scalar_map(self, mass_component=0, result_index=1):
+        """ Generates an array of the scalar values for all space """
         smap = self.space.blank()
-        if infer:
-            # works around space for each z value
-            # since interp is only 1d
-            r, _ = self.space.rz()
-            flatr = r[0]
-            R = [r[p] for p in self.space.radius_list(0)]
-            for z in range(self.space.points[0]):
-                S = [self.results[p][mass_component][1] for p in self.space.radius_list(z)]
-                smap[z] = np.interp(flatr, R, S, right=0)
-        else:
-            for point, vals in self.results.items():
-                smap[point] = vals[mass_component][1]
+        fast = self.space.count != len(self.results)
+
+        for p, vals in self.results.items():
+            v = vals[mass_component][result_index]
+            if fast:
+                z, y, x = p
+                for i, j in ((y, x), (x, y)):
+                    for k in (z, -z-1):
+                        smap[k][i][j] = v
+                        smap[k][-i-1][j] = v
+                        smap[k][i][-j-1] = v
+                        smap[k][-i-1][-j-1] = v
+            else:
+                smap[p] = v
         return smap
 
     def dataframe(self, mass_ratios=False, G=None, combined=False):
@@ -178,7 +185,8 @@ class Simulation:
         if mrs is None:
             mrs = dict([(l, 1) for l in self.mass_labels])
 
-        self.mass_components = np.array([np.sum([c*mrs[self.mass_labels[i]] for i, c in enumerate(self.mass_components)], axis=0),])
+        self.mass_components = np.array([np.sum([c*mrs[self.mass_labels[i]]
+            for i, c in enumerate(self.mass_components)], axis=0),])
 
         self.mass_components.flags.writeable = False
         self.mass_labels = ['combined',]
