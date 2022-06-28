@@ -7,9 +7,6 @@ from .simulation import Simulation
 from .memory import memory_usage
 from models.equations import velocity
 
-SCALAR_SOLAR = 8500 # kms-1
-TAU = 0.00000037 # kms-1
-
 class Galaxy(Simulation):
     """
     Makes the Simulation model into a disk
@@ -47,16 +44,6 @@ class Galaxy(Simulation):
         cdf = self.dataframe()
         if R is None: R = self.profile.rotmass_df['R']
         return velocity(R, np.interp(R, cdf['rd'], cdf['x_vec']))
-
-    def smog_convert(self, tau=TAU, reference_scalar=SCALAR_SOLAR, analyse=True):
-        """
-        For a given scalar map galaxy,
-        generates a new Galaxy with the calculated at calculated `points`
-        """
-        new_masses = self.mass_components*np.sqrt(1+reference_scalar/tau)/np.sqrt(1+self.scalar_map()/tau)
-        new_galaxy = Galaxy(new_masses, self.space, mass_labels=self.mass_labels, cp=self.cp)
-        if hasattr(self, 'profile'): new_galaxy.profile = self.profile
-        return new_galaxy
 
 
 

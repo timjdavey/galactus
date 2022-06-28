@@ -71,7 +71,7 @@ class Simulation:
         self.results = {}
         self.fit_ratios = {}
 
-    def analyse(self, sub_list=None, verbose=True, processes=8):
+    def analyse(self, sub_list=None, verbose=False, processes=8):
         """
         Does the main bulk of the analysis
 
