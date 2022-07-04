@@ -6,7 +6,7 @@ from models.sparc.galaxy import generate_galaxy
 
 
 if __name__ == '__main__':
-    points = 300
+    points = 201
     z = 1
 
     for k, p in quality_profiles().items():

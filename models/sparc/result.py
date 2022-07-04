@@ -12,8 +12,8 @@ from models.equations import velocity
 
 ANALYSIS = {
     'Everything': 'R>0',
-    'Quality data': 'Q<2 & Inc<80 & Inc>20',
-    'Quality simulation': 'Q<2 & Inc<80 & Inc>20 & rel_R>0.15 & rel_R<0.9',
+    'Quality data': 'Q<2',
+    'Quality simulation': 'Q<2 & rel_R>0.1 & rel_R<0.9',
 }
 
 COLORS = {

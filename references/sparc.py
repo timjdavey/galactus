@@ -66,7 +66,12 @@ def rar_df(directory=DIR):
     Taken straight from paper, not available on website,
     so included in repo.
     """
-    return pd.read_csv("%s../../rar_fit.csv" % DIR)
+    df = pd.read_csv("%s../../rar_fit.csv" % DIR)
+    df['bul_bool'] = 0
+    df.loc[df['Ybul'] > 0, 'bul_bool'] = 1
+    df['Ymass'] = (0.5*df['Ydisk']+0.7*df['Ybul'])/(0.5+0.7*df['bul_bool'])
+    df['e_Ymass'] = df['e_Ydisk']+df['e_Ybul']
+    return df
 
 def adjustment_df(directory=DIR):
     # create a clean sparc base
@@ -79,14 +84,13 @@ def adjustment_df(directory=DIR):
     sdf['Ybul'] = 0.7
     sdf['e_Ybul'] = 0.7*astro_scatter
     sdf['Ymass'] = 1.0
-    sdf['e_Ymass'] = 0.20
+    sdf['e_Ymass'] = 0.25
     sdf['Source'] = 'SPARC'
 
-    # project the rotmass values onto it
+    # RAR source for comparison
     rdf = rar_df(directory=DIR)
-    mass_cols = ['Ydisk', 'e_Ydisk', 'Ybul', 'e_Ybul']
+    mass_cols = ['Ydisk', 'e_Ydisk', 'Ybul', 'e_Ybul', 'Ymass']
     rdf = rdf[standard_cols+mass_cols].copy()
-    rdf['Source'] = 'RAR'    
-    
+    rdf['Source'] = 'RAR'
     return pd.concat([sdf, rdf], sort=False, ignore_index=True)
 

@@ -122,12 +122,12 @@ class Analysis:
         corner.corner(self.trace)
 
 
-    def plot_nuissance(self, source='SPARC',
+    def plot_nuissance(self, source='SPARC', context='RAR',
             ylims={'Inc': (0,100), 'D': (-10,None), 'Ymass': (0,2)},
             ylabels={'Inc': 'Inclination (Degrees)', 'D': 'Distance (Mpc)', 'Ymass': 'Mass/Luminosity adjustment'},
             xlabel="Galaxy in order of SPARC reference parameter value",
-            title="Nuisance parameters"):
-
+            title="Nuisance parameters", label='SMOG'):
+    
         adjs, params = self.adjs, self.params_galaxy
         
         # clean data
@@ -138,17 +138,19 @@ class Analysis:
         for p in params:
             select_params.append('e_%s' % p)
             select_params.append(p)
+            
         
-        # create single reference dataframe
-        joined = adjs.set_index("Galaxy").join(def_adjs.query("Source=='%s'" % source)[select_params].set_index('Galaxy'), rsuffix='_sparc').reset_index()
+        # create single reference dataframe    
+        joined = adjs.set_index("Galaxy").join(def_adjs.query("Source=='%s'" % source)[select_params].set_index('Galaxy'), rsuffix='_ref').reset_index()
+        if context: joined = joined.set_index("Galaxy").join(def_adjs.query("Source=='%s'" % context)[select_params].set_index('Galaxy'), rsuffix='_context').reset_index()
         
         for i, p in enumerate(params):
             # sort data into ascending
-            joined = joined.sort_values('%s_sparc' % p)
+            joined = joined.sort_values('%s_ref' % p)
             galaxy = joined['Galaxy']
             adjustment = joined[p]
-            sparc = joined['%s_sparc' % p]
-            error = joined['e_%s_sparc' % p]
+            sparc = joined['%s_ref' % p]
+            error = joined['e_%s_ref' % p]
             
             # source reference
             g = sns.lineplot(x=galaxy, y=sparc, ax=axes[i], linestyle='dashed', color='lightgrey')
@@ -161,8 +163,13 @@ class Analysis:
             if p in ylabels: g.set(ylabel=ylabels[p])
             if p in ylims: g.set(ylim=ylims[p])
             
+            # context points
+            if context:
+                g.errorbar(x=galaxy, y=joined['%s_context' % (p)],
+                           yerr=joined['e_%s_context' % (p)], fmt='.r', label=context)
+            
             # nuisance points
-            g.errorbar(x=galaxy, y=adjustment, yerr=adjs['e_%s' % p], fmt='.k')
+            g.errorbar(x=galaxy, y=adjustment, yerr=adjs['e_%s' % p], fmt='ok', label=label)
             
         
         # only want on final
