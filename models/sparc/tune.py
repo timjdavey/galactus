@@ -11,10 +11,10 @@ from models.sparc.result import Result
 from references.sparc import adjustment_df
 
 
-class Analysis:
+class Tune:
 
-    UNIVERSE = ['gamma', 'alpha', 'epsilon']
-    GALAXY = ['Inc', 'D', 'N', 'Ydisk', 'Ybul', 'Ymass', 'tau', 'alpha_g']
+    UNIVERSE = ['gamma',]
+    GALAXY = ['Inc', 'D', 'Ymass']
 
     def __init__(self, model, name=None, null_function=None):
         self.name = name
@@ -110,9 +110,6 @@ class Analysis:
         adjs, uni = self.params(fast)
         # saves last generated result for convience
         self.result = Result(adjustments=adjs, *args, **kwargs)
-
-        # don't assume that there are universal params
-        self.result.apply_prediction(uni)
 
         return self.result
 

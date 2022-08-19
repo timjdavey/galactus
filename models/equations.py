@@ -17,9 +17,3 @@ def combined_force(data, force_label, mass_labels, mass_ratios):
 def velocity(R, F):
     """ Velocity of a given R and F """
     return np.sign(F)*(np.abs(R*F)**0.5)
-
-def smog(scalar, tau=None, reference=None):
-    """ The smog adjustment, for reference frame """
-    if tau is None: tau = 1#TAU
-    if reference is None: reference = SCALAR_SOLAR
-    return 1.44e5/np.sqrt(1+scalar)#np.sqrt((1+reference*tau)/(1+scalar*tau))

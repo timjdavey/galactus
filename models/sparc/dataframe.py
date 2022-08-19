@@ -12,6 +12,10 @@ def augment_df(sim, adf=None, R=None, G=None):
     for k in ('D', 'e_D', 'Inc', 'e_Inc', 'Vflat', 'e_Vflat', 'Q', 'MHI', 'L[3.6]', 'Reff'):
         df[k] = sim.profile.sparc_dict[k]
 
+    # store total mass, if combined
+     if len(sim.mass_sums) == 1:
+         df['M'] = sim.mass_sums[0]
+
     # with mass ratios from sparc paper by
     # https://arxiv.org/pdf/1606.09251.pdf eq.2
     mrs = MASS_RATIOS.copy()
@@ -94,23 +98,21 @@ def augment_df(sim, adf=None, R=None, G=None):
             def itp(ilab):
                 return np.interp(R, cdf['rd'], cdf[ilab])
     
-            df['Fnewton_%s' % label] = itp('x_vec')
-            df['Fscalar_%s' % label] = itp('F_scalar')
-            df['S%s' % label] = velocity(R, df['Fnewton_%s' % label])
+            df['F_%s' % label] = itp('x_vec')
+            df['S%s' % label] = velocity(R, df['F_%s' % label])
     
         # combine components
-        df['Fnewton'] = combined_force(df, 'Fnewton', sim.mass_labels, mrs)
-        df['Fscalar'] = combined_force(df, 'Fscalar', sim.mass_labels, mrs)
+        df['F'] = combined_force(df, 'F', sim.mass_labels, mrs)
     else:
         cdf = sdf.set_index('x').loc[x_right_points]
-        df['Fnewton'] = np.interp(R, cdf['rd'], cdf['x_vec'])
+        df['F'] = np.interp(R, cdf['rd'], cdf['x_vec'])
         if adf is not None and 'Ymass' in adf:
-            df['Fnewton'] *= Ymass
+            df['F'] *= Ymass
 
     # S for simulated
     # later use P for predicted
     # Sbar from Sgbar
-    df['Sgbar'] = df['Fnewton']
+    df['Sgbar'] = df['F']
     df['Sbar'] = velocity(R, df['Sgbar'])
     
     # benchmark log bars, so can filter data

@@ -7,11 +7,16 @@ from models.galaxy import Galaxy
 from models.load import load_sparc
 from models.sparc.profile import MASS_RATIOS
 from models.equations import smog
+from models.workers import map_worker
 
 def generate_galaxy(profile, space_points=300, z=1, excess_ratio=1.5, calc_points=0,
-        rotmass_points=True, cp=None):
+        rotmass_points=True, cp=None, worker=None):
     """
     Generates a sparc galaxy given a profile
+
+    :rotmass_points: bool, whether to run for the points in the sparc rotmass file
+    :calc_points: int, total number of even points to create if want a general picture of profile
+    :cp: for logging
     """
     uid = profile.uid
 
@@ -19,6 +24,7 @@ def generate_galaxy(profile, space_points=300, z=1, excess_ratio=1.5, calc_point
     masses, labels = profile.masses(space)
     
     sim = Galaxy(masses, space, mass_labels=labels, cp=cp)
+    if worker: sim.worker = worker
     sim.profile = profile
     sim.name = uid
     
@@ -34,59 +40,39 @@ def generate_galaxy(profile, space_points=300, z=1, excess_ratio=1.5, calc_point
     return sim
 
 
-def galaxy_scalar_map(profile, space_points=300, z=1, excess_ratio=1.5, cp=None, fast=True, load=False, save=False, DIR='generations/'):
+def generate_map(profile, space_points=300, z=1,
+    excess_ratio=1.5, fit_ratios=None, cp=None, fast=True):
     """
-    Creates a scalar map galaxy
+    Creates a map galaxy
     """
+    sim = generate_galaxy(profile, space_points, z, excess_ratio,
+        # do no analysis
+        rotmass_points=False, calc_points=0, cp=cp, worker=map_worker)
     
-    namespace = "%s_%s_%s" % ('sparc_map', space_points, z)
-
-    if load:
-        return load_sparc(namespace, profiles={profile.uid: profile}, ignore=False)[profile.uid]
+    if z > 1:
+        # if not flat
+        # need to fit simulation to Lelli mass model components
+        sim.combine_masses(fit_ratios)
     else:
-        sim = generate_galaxy(profile, space_points, z, excess_ratio,
-                rotmass_points=z>1, calc_points=0, cp=cp) # do no analysis
+        # otherwise combine masses using 0.5, 0.7, 1.0 ratios
+        sim.combine_masses(MASS_RATIOS)
     
-        if z > 1:
-            # if not flat
-            # need to fit simulation to Lelli mass model components
-            sim.combine_masses(sim.fit_ratios)
-        else:
-            # otherwise combine masses using 0.5, 0.7, 1.0 ratios
-            sim.combine_masses(MASS_RATIOS)
-        
-        if fast:
-            # do for slice & infer in galaxy_smog
-            sim.analyse(sim.space.symmetric_points)
-        else:
-            # otherwise calculate for all points
-            sim.analyse()
-
-        if save:
-            # ironically need to save masses to avoid having to do
-            # fit_simulation where z > 1
-            sim.save('%s%s_%s' % (DIR, namespace, profile.uid), masses=True)
-        return sim
-
-
-def galaxy_smog(mapsim, tau=None, reference=None, analyse=True):
-    """
-    For a given scalar map galaxy,
-    generates a new Galaxy with the calculated at calculated `points`
-    """
-    smap = mapsim.scalar_map()
-    adjusted_masses = mapsim.mass_components*smog(smap, tau, reference)
-    new_galaxy = Galaxy(adjusted_masses, mapsim.space, mass_labels=mapsim.mass_labels, cp=mapsim.cp)
-    return new_galaxy
-
-
-def save_smog(profile, points, z, filename, fast=True, save_masses=False):
-    """
-    For a given profile, generate and save
-    """
-    scalar_map_sim = galaxy_scalar_map(profile, points, z, fast=fast)
-    sim = galaxy_smog(scalar_map_sim)
-    sim.profile = profile
-    sim.analyse(profile.rotmass_points(sim.space, left=True))
-    sim.save(filename, masses=save_masses)
+    if fast:
+        # do for slice & infer in galaxy_smog
+        sim.analyse(sim.space.symmetric_points)
+    else:
+        # otherwise calculate for all points
+        sim.analyse()
     return sim
+
+
+def generate_pmog(profile, space_points, z, worker, pmog_k=25000, fit_ratios=None):
+    """ Generates for a pmog galaxy """
+    smap = galaxy_scalar_map(profile, space_points, z, fit_ratios=fit_ratios)
+    vals = smap.space_maps
+    vals.append(pmog_k)
+    gal = Galaxy(smap.mass_components, smap.space, mass_labels=smap.mass_labels, smaps=vals)
+    gal.analyse(smap.profile.rotmass_points(smap.space))
+    gal.profile = profile
+    return gal
+

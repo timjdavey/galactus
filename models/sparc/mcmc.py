@@ -5,7 +5,7 @@ import numpy as np
 
 TIGHT = {'Inc': 1.3, 'D': 3, 'Ymass': 15}
 
-def mcmc(df, train_y=True, train_inc=True, train_d=True, tight=None):
+def mcmc(df, train_g=False, train_y=True, train_inc=True, train_d=True, tight=None):
 
     df = df.copy()
 
@@ -31,7 +31,10 @@ def mcmc(df, train_y=True, train_inc=True, train_d=True, tight=None):
     with pm.Model(coords=coords) as galaxy_model:
         
         # Universal priors
-        gamma = pm.Uniform('gamma', 0.5, 200)
+        if train_g:
+             gamma = pm.Uniform('gamma', 0.5, 2000)
+         else:
+             gamma = 1
         
         # Galaxy priors
         if train_inc:

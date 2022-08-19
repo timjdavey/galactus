@@ -16,13 +16,6 @@ ANALYSIS = {
     'Quality simulation': 'Q<2 & rel_R>0.1 & rel_R<0.9',
 }
 
-COLORS = {
-    'Everything': 'yellow',
-    'Quality data': 'orange',
-    'Quality simulation': 'red',
-}
-
-
 threshold_label = 'Threshold'
 
 DEBUG = ANALYSIS.copy()
@@ -230,12 +223,6 @@ class Result:
                 g.set(xlabel=xlabel, ylabel=ylabel)
         return g
         
-    def plot_rars(self, *args, **kwargs):
-        """ Plots all the rar plots. Similar to a QQ plot """
-
-        for i in range(4):
-            self.plot_rar(kind=i, *args, **kwargs)
-
 
     def residual(self, df=None, resid='Sgbar', ax=None, plot=True, **kwargs):
         """ Plots a specific log residual """
@@ -322,10 +309,3 @@ class Result:
             
             if count and i == count-1: return
     
-    def apply_prediction(self, params):
-        # once you've done the adjustments via inputting it into a Results object
-        # this will update the mass ratios, R etc for us
-        # so can safely use here
-        self.dataframe['Fnewton'] *= params['gamma']
-        self.dataframe['Sgbar'] *= params['gamma']
-        self.dataframe['Sbar'] = velocity(self.dataframe['R'], self.dataframe['Sgbar'])
