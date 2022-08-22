@@ -10,7 +10,7 @@ from models.workers import ratio_worker
 if __name__ == '__main__':
     profiles = quality_profiles(3)
     points, z = 201, 21
-    filename = 'pmog/%s_%s_%s'
+    filename = 'ratio/%s_%s_%s'
     count = len(profiles)
     errors = []
 

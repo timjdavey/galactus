@@ -16,10 +16,10 @@ if __name__ == '__main__':
     for i, name in enumerate(profiles.keys()):
         try:
             gal = generate_galaxy(profile, space_points, z)
-            gal.save('flat_baseline/%s_%s_%s' % (points, z, name), masses=False)
+            gal.save('baseline/%s_%s_%s' % (points, z, name), masses=False)
 
             mog = generate_pmog(profile, space_points, z, pmog_worker, fit_ratios=gal.fit_ratios)
-            mog.save('flat_pmog/%s_%s_%s' % (points, z, name), masses=False)
+            mog.save('pmog/%s_%s_%s' % (points, z, name), masses=False)
 
             print("%s of %s %s %.1fs" % (i, count, filename, toc-tic))
         except IndexError:
