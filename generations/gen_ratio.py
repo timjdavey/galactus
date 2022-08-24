@@ -2,7 +2,7 @@ import sys
 sys.path.append("../")
 
 import time
-from .params import points, z
+from models.generations.params import points, z
 from models.sparc.profile import quality_profiles
 from models.sparc.galaxy import generate_pmog
 from models.workers import ratio_worker
