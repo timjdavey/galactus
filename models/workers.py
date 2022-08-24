@@ -29,9 +29,12 @@ def gravity_worker(position, masses, scale, smap, mode):
     # convert that to r^3 to normalise vectors in each axis
     r = np.sqrt(np.sum(r_vec**2, axis=0))
     # handle the divide by zero error for it's current position
+    # but putting current position at effectively infinity
     try:
         r[p] = scale #1e6
     except IndexError:
+        # IndexError occurs when simulation too small
+        # for the last position occassionally
         pass
     r3 = r**3
 
@@ -48,18 +51,20 @@ def gravity_worker(position, masses, scale, smap, mode):
         # Generate map
         elif mode == 1:
             F_comp = -mass*r_vec/r3
-            component = np.linalg.norm(F_comp, axis=0)
-            potential = np.sum(component*r)
-            diff = np.sum(component)
+            potential = np.sum(np.linalg.norm(F_comp*r, axis=0))
+            diff = np.sum(np.linalg.norm(F_comp, axis=0))
             frame = np.sum(mass*np.exp(-r))
             results.append([potential, diff, frame])
 
         # Generate pmog or ratio
         elif mode == 2 or mode == 3:
-            u, d, f, k  = smap # potential, diff, frame, constant
-            if mode == 2:
+            # potential, diff, frame, constant
+            u, d, f, k  = smap
+            
+            if mode == 2: # pmog
                 adj = np.sqrt(u/u[p])*np.sqrt((k*r*f[p]/(d*f))+1)
-            elif mode == 3:
+            
+            elif mode == 3: # ratio
                 adj = u/u[p]
 
             F_comp = -mass*adj*r_vec/r3

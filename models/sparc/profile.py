@@ -126,7 +126,6 @@ class SparcMassProfile:
 
         # automatically fit decomposition profile
         # to the pre-decomposed points in the mass model
-        # this to be updated when find out what the actual is
         for comp in self.fit_components:
             # if passing always override
             if self.auto_fit:
