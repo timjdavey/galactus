@@ -13,6 +13,8 @@ if __name__ == '__main__':
     count = len(profiles)
     errors = []
 
+    print("Starting flats generation")
+
     for i, name in enumerate(profiles.keys()):
         try:
             gal = generate_galaxy(profile, space_points, z)

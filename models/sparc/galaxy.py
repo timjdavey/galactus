@@ -6,7 +6,6 @@ from models.space import Space
 from models.galaxy import Galaxy
 from models.load import load_sparc
 from models.sparc.profile import MASS_RATIOS
-from models.equations import smog
 from models.workers import map_worker
 
 def generate_galaxy(profile, space_points=300, z=1, excess_ratio=1.5, calc_points=0,
