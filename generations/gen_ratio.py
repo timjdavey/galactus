@@ -2,7 +2,8 @@ import sys
 sys.path.append("../")
 
 import time
-from models.generations.params import points, z
+from models.params import points, z
+from models.load import load_sparc
 from models.sparc.profile import quality_profiles
 from models.sparc.galaxy import generate_pmog
 from models.workers import ratio_worker
@@ -15,12 +16,18 @@ if __name__ == '__main__':
     errors = []
 
     print("Starting ratio generation")
-    fits = load_sparc('baseline/%s_%s' % (points, z), masses=False)
+    try:
+        fits = load_sparc('baseline/%s_%s' % (points, z), ignore=False)
+    except FileNotFoundError:
+        raise FileNotFoundError("Please run gen_baseline.py first")
     for i, name in enumerate(profiles.keys()):
         try:
-            gal = generate_pmog(profile, space_points, z, ratio_worker, fit_ratios=fits[name].fit_ratios)
+            tic = time.time()
+            profile = profiles[name]
+            gal = generate_pmog(profile, points, z, ratio_worker, fit_ratios=fits[name].fit_ratios)
             gal.save(filename % (points, z, name), masses=False)
-            print("%s of %s %s %.1fs" % (i, count, filename, toc-tic))
+            toc = time.time()
+            print("%s of %s %s %.1fs" % (i, count, filename % (points, z, name), toc-tic))
         except IndexError:
             errors.append(name)
 

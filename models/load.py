@@ -19,7 +19,7 @@ def load(filename, directory=DIR, masses=True):
     return sim
 
 
-def load_sparc(namespace, profiles=None, directory=DIR, ignore=True):
+def load_sparc(namespace, profiles=None, directory=DIR, ignore=True, masses=False):
     """
     Loads sparc simulations for a given set of galaxy ids
     Reassigns the profiles to refresh them just in case

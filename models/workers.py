@@ -1,6 +1,15 @@
 import numpy as np
 
 
+global_masses, global_scale, global_smap = None, None, None
+
+def initializer(init_masses, init_scale, init_smap):
+    global global_masses
+    global global_scale
+    global global_smap
+    global_masses, global_scale, global_arg = init_masses, init_scale, init_smap
+
+
 def newtonian_worker(position):
     """ Just works out standard Newtonian gravity """
     return gravity_worker(position, global_masses, global_scale, None, 0)

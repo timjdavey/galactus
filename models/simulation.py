@@ -10,17 +10,10 @@ from multiprocessing import Pool, cpu_count
 from matplotlib.colors import LogNorm
 from .space import Space
 from .memory import memory_usage
-from .workers import newtonian_worker
+from .workers import newtonian_worker, initializer
 
 Gkg = 6.67430*(10**-11) # m3 kg-1 s-2
 Gsolar = 4.30091*(10**-6) # kpc Ms-1 (km/s)2
-
-
-def initializer(init_masses, init_scale, init_smap):
-    global global_masses
-    global global_scale
-    global global_smap
-    global_masses, global_scale, global_arg = init_masses, init_scale, init_smap
 
 
 class Simulation:
@@ -61,7 +54,7 @@ class Simulation:
         # if doing the whole space, use chunksize, otherwise keep it lean and mean
         chunksize = tasks//(processes**2) + 1
 
-        with Pool(processes, initializer, (self.mass_components, self.space.scale)) as pool:
+        with Pool(processes, initializer, (self.mass_components, self.space.scale, self.smaps)) as pool:
             for p, r in pool.imap_unordered(self.worker, point_list, chunksize):
                 if verbose: self.log("%s of %s completed %s" % (count, tasks, memory_usage()))
                 self.results[p] = r
@@ -89,9 +82,9 @@ class Simulation:
                 smap[p] = v
         return smap*self.G
 
-    def space_maps(self):
-        """ Generates for all maps """
-        return [self.space_map(i) for i in range(len(self.results[0][0]))]
+    def space_maps(self, mass_index=0):
+        """ Generates for all maps, for a given mass_component (default just 1 as likely combined) """
+        return [self.space_map(i) for i in range(len(list(self.results.values())[0][mass_index]))]
 
     def dataframe(self, mass_ratios=False, combined=False):
         """ Returns the results as a dataframe """

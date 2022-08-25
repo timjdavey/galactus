@@ -17,13 +17,15 @@ if __name__ == '__main__':
 
     for i, name in enumerate(profiles.keys()):
         try:
-            gal = generate_galaxy(profile, space_points, z)
+            tic = time.time()
+            profile = profiles[name]
+            gal = generate_galaxy(profile, points, z)
             gal.save('baseline/%s_%s_%s' % (points, z, name), masses=False)
 
-            mog = generate_pmog(profile, space_points, z, pmog_worker, fit_ratios=gal.fit_ratios)
+            mog = generate_pmog(profile, points, z, pmog_worker, fit_ratios=gal.fit_ratios)
             mog.save('pmog/%s_%s_%s' % (points, z, name), masses=False)
-
-            print("%s of %s %s %.1fs" % (i, count, filename, toc-tic))
+            toc = time.time()
+            print("%s of %s %s %.1fs" % (i, count, name, toc-tic))
         except IndexError:
             errors.append(name)
 

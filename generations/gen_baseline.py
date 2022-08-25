@@ -2,7 +2,7 @@ import sys
 sys.path.append("../")
 
 import time
-from models.generations.params import points, z
+from models.params import points, z
 from models.sparc.profile import quality_profiles
 from models.sparc.galaxy import generate_galaxy
 
@@ -17,8 +17,11 @@ if __name__ == '__main__':
 
     for i, name in enumerate(profiles.keys()):
         try:
-            gal = generate_galaxy(profile, space_points, z)
+            tic = time.time()
+            profile = profiles[name]
+            gal = generate_galaxy(profile, points, z, fit=True)
             gal.save(filename % (points, z, name), masses=False)
+            toc = time.time()
             print("%s of %s %s %.1fs" % (i, count, filename, toc-tic))
         except IndexError:
             errors.append(name)

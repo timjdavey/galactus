@@ -9,13 +9,14 @@ from models.sparc.profile import MASS_RATIOS
 from models.workers import map_worker
 
 def generate_galaxy(profile, space_points=300, z=1, excess_ratio=1.5, calc_points=0,
-        rotmass_points=True, cp=None, worker=None):
+        rotmass_points=True, cp=None, worker=None, fit=False):
     """
     Generates a sparc galaxy given a profile
 
     :rotmass_points: bool, whether to run for the points in the sparc rotmass file
     :calc_points: int, total number of even points to create if want a general picture of profile
     :cp: for logging
+    :fit: whether to fit the simulation to Lelli model for non-flat models
     """
     uid = profile.uid
 
@@ -33,7 +34,7 @@ def generate_galaxy(profile, space_points=300, z=1, excess_ratio=1.5, calc_point
     if calc_points:
         sim.analyse(sim.radius_points(profile.max_r*excess_ratio, calc_points))
     
-    if z > 1:
+    if fit and z > 1:
         sim.fit_ratios = profile.fit_simulation(sim)
 
     return sim
@@ -44,9 +45,9 @@ def generate_map(profile, space_points=300, z=1,
     """
     Creates a map galaxy
     """
+    # do not analyse, as need to combine masses first
     sim = generate_galaxy(profile, space_points, z, excess_ratio,
-        # do no analysis
-        rotmass_points=False, calc_points=0, cp=cp, worker=map_worker)
+        rotmass_points=False, calc_points=0, cp=cp, worker=map_worker, fit=False)
     
     if z > 1:
         # if not flat
@@ -67,8 +68,8 @@ def generate_map(profile, space_points=300, z=1,
 
 def generate_pmog(profile, space_points, z, worker, pmog_k=25000, fit_ratios=None):
     """ Generates for a pmog galaxy """
-    smap = galaxy_scalar_map(profile, space_points, z, fit_ratios=fit_ratios)
-    vals = smap.space_maps
+    smap = generate_map(profile, space_points, z, fit_ratios=fit_ratios)
+    vals = smap.space_maps()
     vals.append(pmog_k)
     gal = Galaxy(smap.mass_components, smap.space, mass_labels=smap.mass_labels, smaps=vals)
     gal.analyse(smap.profile.rotmass_points(smap.space))
