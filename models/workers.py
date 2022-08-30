@@ -1,14 +1,12 @@
 import numpy as np
 
-
 global_masses, global_scale, global_smap = None, None, None
 
 def initializer(init_masses, init_scale, init_smap):
     global global_masses
     global global_scale
     global global_smap
-    global_masses, global_scale, global_arg = init_masses, init_scale, init_smap
-
+    global_masses, global_scale, global_smap = init_masses, init_scale, init_smap
 
 def newtonian_worker(position):
     """ Just works out standard Newtonian gravity """
@@ -60,8 +58,9 @@ def gravity_worker(position, masses, scale, smap, mode):
         # Generate map
         elif mode == 1:
             F_comp = -mass*r_vec/r3
-            potential = np.sum(np.linalg.norm(F_comp*r, axis=0))
-            diff = np.sum(np.linalg.norm(F_comp, axis=0))
+            norm = np.linalg.norm(F_comp, axis=0)
+            potential = np.sum(norm*r)
+            diff = np.sum(norm)
             frame = np.sum(mass*np.exp(-r))
             results.append([potential, diff, frame])
 

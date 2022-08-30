@@ -6,10 +6,10 @@ from models.space import Space
 from models.galaxy import Galaxy
 from models.load import load_sparc
 from models.sparc.profile import MASS_RATIOS
-from models.workers import map_worker
+from models.workers import map_worker, newtonian_worker
 
 def generate_galaxy(profile, space_points=300, z=1, excess_ratio=1.5, calc_points=0,
-        rotmass_points=True, cp=None, worker=None, fit=False):
+        rotmass_points=True, cp=None, worker=newtonian_worker, fit=False):
     """
     Generates a sparc galaxy given a profile
 
@@ -23,8 +23,7 @@ def generate_galaxy(profile, space_points=300, z=1, excess_ratio=1.5, calc_point
     space = Space((z,space_points,space_points), profile.max_r*2*excess_ratio/space_points)
     masses, labels = profile.masses(space)
     
-    sim = Galaxy(masses, space, mass_labels=labels, cp=cp)
-    if worker: sim.worker = worker
+    sim = Galaxy(masses, space, worker=worker, mass_labels=labels, cp=cp)
     sim.profile = profile
     sim.name = uid
     
@@ -71,7 +70,7 @@ def generate_pmog(profile, space_points, z, worker, pmog_k=25000, fit_ratios=Non
     smap = generate_map(profile, space_points, z, fit_ratios=fit_ratios)
     vals = smap.space_maps()
     vals.append(pmog_k)
-    gal = Galaxy(smap.mass_components, smap.space, mass_labels=smap.mass_labels, smaps=vals)
+    gal = Galaxy(smap.mass_components, smap.space, worker=worker, mass_labels=smap.mass_labels, smaps=vals)
     gal.analyse(smap.profile.rotmass_points(smap.space))
     gal.profile = profile
     return gal
