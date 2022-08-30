@@ -13,8 +13,8 @@ def augment_df(sim, adf=None, R=None, G=None):
         df[k] = sim.profile.sparc_dict[k]
 
     # store total mass, if combined
-     if len(sim.mass_sums) == 1:
-         df['M'] = sim.mass_sums[0]
+    if len(sim.mass_sums) == 1:
+        df['M'] = sim.mass_sums[0]
 
     # with mass ratios from sparc paper by
     # https://arxiv.org/pdf/1606.09251.pdf eq.2

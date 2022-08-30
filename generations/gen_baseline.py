@@ -22,7 +22,7 @@ if __name__ == '__main__':
             gal = generate_galaxy(profile, points, z, fit=True)
             gal.save(filename % (points, z, name), masses=False)
             toc = time.time()
-            print("%s of %s %s %.1fs" % (i, count, filename, toc-tic))
+            print("%s of %s %s %.1fs" % (i, count, filename % (points, z, name), toc-tic))
         except IndexError:
             errors.append(name)
 

@@ -32,9 +32,9 @@ def mcmc(df, train_g=False, train_y=True, train_inc=True, train_d=True, tight=No
         
         # Universal priors
         if train_g:
-             gamma = pm.Uniform('gamma', 0.5, 2000)
-         else:
-             gamma = 1
+            gamma = pm.Uniform('gamma', 0.5, 2000)
+        else:
+            gamma = 1
         
         # Galaxy priors
         if train_inc:
@@ -55,7 +55,7 @@ def mcmc(df, train_g=False, train_y=True, train_inc=True, train_d=True, tight=No
 
         radius = pm.Data("radius", df.R, dims="Observation")
         g = pm.Data("g", df.gidx, dims="Observation")
-        force = pm.Data("force", df.Fnewton, dims="Observation")
+        force = pm.Data("force", df.F, dims="Observation")
         
         Fprime = force*gamma
         if train_y:

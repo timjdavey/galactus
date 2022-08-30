@@ -19,8 +19,8 @@ source bin/activate;
 Here you'll likely want to clone a fork of the repo if you're going to do anything beyond recreate the published results.
 
 ```
-git clone git@github.com:timjdavey/darkness.git;
-cd darkness;
+git clone git@github.com:timjdavey/pmog.git;
+cd pmog;
 python -m pip install --upgrade pip;
 ```
 

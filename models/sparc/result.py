@@ -308,4 +308,27 @@ class Result:
             g.set(title=galaxy)
             
             if count and i == count-1: return
+
+    def plot_curves(self, reference=None, cols=5):
+        """ Plots a mini version of all the rotation curves """
+        groups = self.dataframe.query('Q == 1').groupby('Galaxy')
+        fig, axes = plt.subplots((len(groups)//cols)+1, cols, figsize=(20,50))
+        
+        i = 0
+        for galaxy, df in groups:
+            ax = axes[i//cols][i%cols]
+            if reference:
+                # baryonic
+                sdf = reference.dataframe.query('Galaxy=="%s"' % galaxy)
+                g = sns.lineplot(x=sdf['R'], y=sdf['Sbar'], ax=ax)
+
+            # sims
+            g = sns.lineplot(x=df['R'], y=df['Sbar'], ax=ax)
+            # observations
+            g.errorbar(df['R'], df['Vobs'], yerr=df['e_Vobs'], fmt='.k')
+            # labels
+            g.set(title=galaxy, xlabel=None, ylabel=None)
+            i += 1
+
+        return fig
     
