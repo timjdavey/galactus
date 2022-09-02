@@ -13,21 +13,12 @@ from models.equations import velocity
 ANALYSIS = {
     'Everything': 'R>0',
     'Quality data': 'Q<2',
-    'Quality simulation': 'Q<2 & rel_R>0.1 & rel_R<0.9',
+    'Quality simulation': 'Q<2 & rel_R<0.95 & rel_R>0.15'
 }
-
-threshold_label = 'Threshold'
-
-DEBUG = ANALYSIS.copy()
-DEBUG[threshold_label] = 'VSdiffabs<%s'
-DEBUG['Quality_%s' % threshold_label] = 'VSdiffabs<%s & Q<3 & Inc<80 & Inc>20'
-DEBUG['Anti_%s' % threshold_label] = 'VSdiffabs>%s'
-
 
 IDENS = {
     'V': 'Lelli',
-    'S': 'Baryonic', # Simulated from decomps
-    'P': 'Predicted', # Using adjusted values
+    'S': 'Simulated',
 }
 
 class Result:
@@ -35,8 +26,8 @@ class Result:
     Wrapper class to do basic analysis on the whole SPARC set of results.
     """
 
-    def __init__(self, simulations, adjustments=None, queries_strs=ANALYSIS, iden_labels=IDENS,
-                threshold=0.1, idens=('S')):
+    def __init__(self, simulations, adjustments=None, queries_strs=ANALYSIS,
+        iden_labels=IDENS, idens=('S')):
 
         dfs = []
         for name, sim in simulations.items():
@@ -57,16 +48,8 @@ class Result:
         self.simulations = simulations
         self.queries_strs = queries_strs
         self.iden_labels = iden_labels
-        self.threshold = threshold
         self.idens = idens
         self.adjustments = adjustments
-
-    @property
-    def queries(self):
-        quer = {}
-        for k,v in self.queries_strs.items():
-            quer[k] = v % self.threshold if threshold_label in k else v
-        return quer
 
     def datasets(self, df=None):
         """
@@ -74,44 +57,7 @@ class Result:
         using the `query` param
         """
         df = self.dataframe if df is None else df
-        return dict([(k, df.query(q)) for k, q in self.queries.items()])
-
-
-    def statistics(self, g_not_vel=True, query_key=None, iden=None, weight=False, residuals=True):
-        """
-        Returns a selection of key statistics about the 
-        """
-        from sklearn.metrics import r2_score,\
-            mean_absolute_error, mean_squared_error, mean_squared_log_error
-        df = self.dataframe.copy()
-        datasets = self.datasets()
-        if iden is None: iden = self.idens[-1]
-        datakeys = [query_key,] if query_key else datasets.keys()
-        observations = {
-            'little g': ('gobs', '%sgbar' % iden),
-            'velocity': ('Vobs', '%sbar' % iden),
-        }
-
-        data = []
-        for dk in datakeys:
-            df = datasets[dk]
-            for label, ys in observations.items():
-                y_true, y_pred = df[ys[0]], df[ys[1]]
-                weight = None
-                stats = {
-                    'dataset': dk,
-                    'observation': label,
-                    'r2': r2_score(y_true, y_pred, sample_weight=weight),
-                    'RMSE': mean_squared_error(y_true, y_pred, sample_weight=weight, squared=False),
-                    'MAE': mean_absolute_error(y_true, y_pred, sample_weight=weight),
-                    'MLSE': mean_squared_log_error(y_true, y_pred, sample_weight=weight)
-                }
-                if residuals:
-                    stats['Res(Log y)'] = self.residual(df, resid='%sgbar' % iden, iden=iden, plot=False).slope
-                    stats['Res(Log mhi_R)'] = self.residual(df, resid='mhi_R', iden=iden, plot=False).slope
-                
-                data.append(stats)
-        return pd.DataFrame(data=data)
+        return dict([(k, df.query(q)) for k, q in self.queries_strs.items()])
 
     def plot_thresholds(self):
         """
@@ -134,7 +80,7 @@ class Result:
             # then plot scatter residuals
             df = datasets[name]
             h = sns.scatterplot(data=df, x='rel_R', y='VSdiff',
-                s=2, hue='MHI', palette='icefire', ax=axes[i])
+                s=2, hue='log_M', palette='icefire', ax=axes[i])
             h.axhline(y=0, color='black', linestyle='dashed')
 
         # then plot the CDF for picking the right level
@@ -148,7 +94,7 @@ class Result:
         sns.ecdfplot(data=pd.concat(dfs, ignore_index=True), x='VSdiffabs', hue='set', linestyle='dotted', ax=axes)
 
 
-    def plot_rar(self, kind=0, idens=None, query_key=None, title=None, line=[1,6], velocity=False, color=None, label=None, axis=None):
+    def plot_rar(self, kind=0, idens=None, query_key=None, title=None, size=5, line=[1,6], velocity=False, label='Log($g_{pre}$) [$ms^{-2}$]', axis=None):
         """
         Plots various 
         kind == 0 is density plot
@@ -161,7 +107,7 @@ class Result:
 
         height = len(datakeys)
         width = len(idens)
-        fig, axes = plt.subplots(height, width, sharex=True, sharey=True, figsize=(10,10*height))
+        fig, axes = plt.subplots(height, width, sharex=True, sharey=True, figsize=(size*width,size*height))
 
         # plot filter queries on each row
         for row, name in enumerate(datakeys):
@@ -178,18 +124,18 @@ class Result:
                 if velocity:
                     x, y = '%sbar' % iden, 'Vobs'
                     lx, ly = np.log10(df[x]), np.log10(df[y])
-                    ylabel = 'Observed Velocity'
+                    ylabel = 'Observed Velocity [$ms^{-1}$]'
                     xlabel = '%s Velocity' % self.iden_labels[iden]
                 else:
                     x, y = '%sgbar' % iden, 'gobs'
                     lx, ly = np.log10(df[x]), np.log10(df[y])
-                    ylabel = 'Log of Observed g'
-                    xlabel = 'Log of %s g' % self.iden_labels[iden]
+                    ylabel = 'Log($g_{obs}$) [$ms^{-2}$]'
+                    xlabel = label
                 
-                # rel_R coloured scatter
+                # M coloured scatter
                 if kind == 0:
                     g = sns.scatterplot(data=df, x=lx, y=ly,
-                        alpha=1.0, s=2, hue=np.log10(df['mhi_R']), palette='icefire', ax=ax)
+                        alpha=1.0, s=3, hue=np.log10(df['M']), palette='Spectral', ax=ax)
                     
                 # density
                 elif kind == 1:
@@ -208,12 +154,7 @@ class Result:
                 elif kind == 3:
                     g = sns.histplot(x=lx, y=ly,
                         bins=30, cmap="Blues", alpha=1.0, ax=ax)
-                    g = sns.regplot(x=lx, y=ly, scatter=False, ax=ax, color='red')
-                
-                # for overlay plots
-                elif kind == 4:
-                    g = sns.scatterplot(data=df, x=lx, y=ly,
-                        alpha=1.0, s=2, color=color, label=label, ax=ax)
+                    #g = sns.regplot(x=lx, y=ly, scatter=False, ax=ax, color='red')
 
                 # title (dataset), reference line, labels
                 if col == 0:
@@ -221,14 +162,16 @@ class Result:
 
                 sns.lineplot(x=line, y=line, color='grey', ax=ax, linestyle='dotted')
                 g.set(xlabel=xlabel, ylabel=ylabel)
-        return g
+        return fig
         
 
     def residual(self, df=None, resid='Sgbar', ax=None, plot=True, **kwargs):
         """ Plots a specific log residual """
         if df is None: df = self.dataframe
+
+        fig, axes = plt.subplots(1, 1, figsize=(10,3))
         
-        y = np.log10(df['gobs']/df[resid])
+        y = np.log10(df['gobs']/df['Sgbar'])
         x = np.log10(df[resid])
         reg = sp.stats.linregress(x, y)
 
@@ -237,7 +180,7 @@ class Result:
             sns.lineplot(x=x, y=reg.slope*x+reg.intercept, color='red', linestyle='dashed', ax=ax)
             g.axhline(y=0, color='grey', linestyle='dotted')
             g.set(ylabel='Residuals [dex]', **kwargs)
-            return g
+            return fig
         else:
             return reg
 
@@ -317,8 +260,8 @@ class Result:
         i = 0
         for galaxy, df in groups:
             ax = axes[i//cols][i%cols]
-            if reference:
-                # baryonic
+            if reference is not None:
+                # typically baryonic
                 sdf = reference.dataframe.query('Galaxy=="%s"' % galaxy)
                 g = sns.lineplot(x=sdf['R'], y=sdf['Sbar'], ax=ax)
 

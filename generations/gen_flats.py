@@ -22,7 +22,7 @@ if __name__ == '__main__':
             gal = generate_galaxy(profile, points, z)
             gal.save('baseline/%s_%s_%s' % (points, z, name), masses=False)
 
-            for kind, worker in (('pmog', pmog_worker),):# ('ratio', ratio_worker)):
+            for kind, worker in (('pmog', pmog_worker), ('ratio', ratio_worker)):
                 mog = generate_pmog(profile, points, z, worker, fit_ratios=gal.fit_ratios)
                 mog.save('%s/%s_%s_%s' % (kind, points, z, name), masses=False)
 

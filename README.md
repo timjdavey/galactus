@@ -24,11 +24,7 @@ cd pmog;
 python -m pip install --upgrade pip;
 ```
 
-There's only a few dependancies, of which are listed below
-```
-python -m pip install scipy numpy jupyter pandas seaborn matplotlib arviz pymc3 theano;
-```
-Otherwise the requirements.txt is up to date
+For dependancies please use
 ```
 python -m pip install -r requirements.txt;
 ```

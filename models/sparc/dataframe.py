@@ -12,10 +12,6 @@ def augment_df(sim, adf=None, R=None, G=None):
     for k in ('D', 'e_D', 'Inc', 'e_Inc', 'Vflat', 'e_Vflat', 'Q', 'MHI', 'L[3.6]', 'Reff'):
         df[k] = sim.profile.sparc_dict[k]
 
-    # store total mass, if combined
-    if len(sim.mass_sums) == 1:
-        df['M'] = sim.mass_sums[0]
-
     # with mass ratios from sparc paper by
     # https://arxiv.org/pdf/1606.09251.pdf eq.2
     mrs = MASS_RATIOS.copy()
@@ -35,7 +31,7 @@ def augment_df(sim, adf=None, R=None, G=None):
         if 'Inc' in adf:
             inclination = adf.Inc.values[0]
 
-    # store Y's
+    # store Y's & M's
     if adf is not None and 'Ymass' in adf:
         Ymass = adf.Ymass.values[0]
         for k, v in mrs.items():
@@ -50,6 +46,20 @@ def augment_df(sim, adf=None, R=None, G=None):
                 df[ekey] = adf[ekey].values[0]
             else:
                 df[ekey] = value*10**0.1
+
+        Ymass = 1
+
+    # store total mass
+    if len(sim.mass_labels) == 1:
+        M = np.sum(sim.mass_sums)*Ymass
+    else:
+        M = 0
+        for i, label in enumerate(sim.mass_labels):
+            M += sim.mass_sums[i]*mrs[label]
+
+    df['M'] = M
+    df['log_M'] = np.log10(df['M'])
+
 
     # Tau - add it as standard so can use it in all equation uses
     tau_key = 'tau'
@@ -123,6 +133,8 @@ def augment_df(sim, adf=None, R=None, G=None):
     # additional helper variables
     df['rel_R'] = df['R']/df['R'].max()
     df['mhi_R'] = df['R']/df['MHI']
+
+
 
     return df
 
