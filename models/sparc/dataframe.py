@@ -4,6 +4,8 @@ import numpy as np
 from models.equations import velocity, sin, combined_force
 from models.sparc.profile import MASS_RATIOS
 
+kpc_to_km = 3.08567758128e13
+
 def augment_df(sim, adf=None, R=None, G=None):
     # use rotmass as base df
     df = sim.profile.rotmass_df.copy()
@@ -86,8 +88,8 @@ def augment_df(sim, adf=None, R=None, G=None):
 
     # calculate additional added needed for benchmarking rar
     df['Vbar'] = np.sum([mrs[c]*df["V%s" % c]**2 for c in sim.profile.labels],axis=0)**0.5
-    df['Vgbar'] = df['Vbar']**2/R
-    df['gobs'] = df['Vobs']**2/R
+    df['Vgbar'] = df['Vbar']**2/(R*kpc_to_km)
+    df['gobs'] = df['Vobs']**2/(R*kpc_to_km)
 
     # interp force values from simulation
     # for now using unitary mass ratios
@@ -122,8 +124,8 @@ def augment_df(sim, adf=None, R=None, G=None):
     # S for simulated
     # later use P for predicted
     # Sbar from Sgbar
-    df['Sgbar'] = df['F']
-    df['Sbar'] = velocity(R, df['Sgbar'])
+    df['Sgbar'] = df['F']/(kpc_to_km)
+    df['Sbar'] = velocity(R*kpc_to_km, df['Sgbar'])
     
     # benchmark log bars, so can filter data
     # for a certain quality threshold

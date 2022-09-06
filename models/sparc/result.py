@@ -94,7 +94,8 @@ class Result:
         sns.ecdfplot(data=pd.concat(dfs, ignore_index=True), x='VSdiffabs', hue='set', linestyle='dotted', ax=axes)
 
 
-    def plot_rar(self, kind=0, idens=None, query_key=None, title=None, size=5, line=[1,6], velocity=False, label='Log($g_{pre}$) [$ms^{-2}$]', axis=None):
+    def plot_rar(self, kind=0, idens=None, query_key=None, title=None, size=5,
+        line=[-12,-8], velocity=False, label='Log($g_{pre}$) [$ms^{-2}$]', axis=None):
         """
         Plots various 
         kind == 0 is density plot

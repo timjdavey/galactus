@@ -7,6 +7,7 @@ from models.galaxy import Galaxy
 from models.load import load_sparc
 from models.sparc.profile import MASS_RATIOS
 from models.workers import map_worker, newtonian_worker
+from models.params import k as pmog_k
 
 def generate_galaxy(profile, space_points=300, z=1, excess_ratio=1.5, calc_points=0,
         rotmass_points=True, cp=None, worker=newtonian_worker, fit=False):
@@ -65,7 +66,7 @@ def generate_map(profile, space_points=300, z=1,
     return sim
 
 
-def generate_pmog(profile, space_points, z, worker, pmog_k=25000, fit_ratios=None):
+def generate_pmog(profile, space_points, z, worker, pmog_k=pmog_k, fit_ratios=None):
     """ Generates for a pmog galaxy """
     smap = generate_map(profile, space_points, z, fit_ratios=fit_ratios)
     vals = smap.space_maps()

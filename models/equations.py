@@ -1,8 +1,5 @@
 import numpy as np
 
-SCALAR_SOLAR = 8500 # kms-1
-TAU = 1/0.00000037 # kms-1
-
 def cos(deg):
     """ Do cos in degrees rather than radians """
     return np.cos(deg*np.pi/180)
