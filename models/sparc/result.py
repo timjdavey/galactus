@@ -12,8 +12,8 @@ from models.equations import velocity
 
 ANALYSIS = {
     'Everything': 'R>0',
-    'Quality data': 'Q<2',
-    'Quality simulation': 'Q<2 & rel_R<0.95 & rel_R>0.15'
+    'Quality data': 'Q==1',
+    'Quality simulation': 'Q==1 & rel_R<0.95 & rel_R>0.15'
 }
 
 IDENS = {
