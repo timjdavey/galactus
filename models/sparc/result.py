@@ -59,6 +59,10 @@ class Result:
         df = self.dataframe if df is None else df
         return dict([(k, df.query(q)) for k, q in self.queries_strs.items()])
 
+    def counts(self):
+        for key, data in self.datasets().items():
+            print(key, len(data), len(data.groupby('Galaxy')))
+
     def plot_thresholds(self):
         """
         Plots a histogram of the differences in V (sparc model) & W (simulated model)
@@ -105,10 +109,13 @@ class Result:
         datasets = self.datasets()
         datakeys = [query_key,] if query_key else datasets.keys()
         if idens is None: idens = self.idens
-
+        
         height = len(datakeys)
         width = len(idens)
-        fig, axes = plt.subplots(height, width, sharex=True, sharey=True, figsize=(size*width,size*height))
+        if axis is None:    
+            fig, axes = plt.subplots(height, width, sharex=True, sharey=True, figsize=(size*width,size*height))
+        else:
+            fig, axes = None, None
 
         # plot filter queries on each row
         for row, name in enumerate(datakeys):
@@ -163,14 +170,15 @@ class Result:
 
                 sns.lineplot(x=line, y=line, color='grey', ax=ax, linestyle='dotted')
                 g.set(xlabel=xlabel, ylabel=ylabel)
-        return fig
+        return fig if axis is None else axis
         
 
     def residual(self, df=None, resid='Sgbar', ax=None, plot=True, **kwargs):
         """ Plots a specific log residual """
         if df is None: df = self.dataframe
 
-        fig, axes = plt.subplots(1, 1, figsize=(10,3))
+        if ax is None:
+            _, ax = plt.subplots(1, 1, figsize=(10,3))
         
         y = np.log10(df['gobs']/df['Sgbar'])
         x = np.log10(df[resid])
@@ -181,24 +189,33 @@ class Result:
             sns.lineplot(x=x, y=reg.slope*x+reg.intercept, color='red', linestyle='dashed', ax=ax)
             g.axhline(y=0, color='grey', linestyle='dotted')
             g.set(ylabel='Residuals [dex]', **kwargs)
-            return fig
+            return ax
         else:
             return reg
 
-    def residual_hist(self, query_key=None, resid='Sgbar', bins=100, color=None, label=None):
+    def residual_stats(self, resid='Sgbar'):
+        from sklearn.metrics import mean_squared_error
+        stats = []
+        for key, df in self.datasets().items():
+            data = np.log10(df['gobs']/(df[resid]))
+            mse = mean_squared_error(data, np.zeros((len(data))))
+            stats.append({
+                'filter': key,
+                'mean': data.mean(),
+                'std': data.std(),
+                'count': data.count(),
+                'mse': mse,
+                'rmse': mse**0.5,
+            })
+        return pd.DataFrame(stats)
+
+    def residual_hist(self, query_key=None, resid='Sgbar', bins=100, color=None, label=None, ax=None):
         """ Plots the histogram of the residual """
         df = self.datasets()[query_key] if query_key else self.dataframe
         data = np.log10(df['gobs']/(df[resid]))
-        g = sns.histplot(data, bins=bins, color=color, label=label)
+        g = sns.histplot(data, bins=bins, color=color, label=label, ax=ax)
         g.set(xlabel='Residuals [dex]', ylabel='Measurements')
         return g, data
-
-    def residual_hists(self):
-        """ Plots all the histograms for all query keys on a single plot """
-        outputs = {}
-        for k, v in self.queries_strs.items():
-            outputs[k] = self.residual_hist(k, color=COLORS[k], label=k)
-        return outputs
 
     def plot_comparison(self, compare=None, count=None, profiles=False, sharex=False):
         """

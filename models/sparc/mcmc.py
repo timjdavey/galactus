@@ -5,7 +5,7 @@ import numpy as np
 
 TIGHT = {'Inc': 1.3, 'D': 3, 'Ymass': 15}
 
-def mcmc(df, train_g=False, train_y=True, train_inc=True, train_d=True, tight=None):
+def mcmc(df, train_g=False, train_y=True, y_uni=False, train_inc=True, train_d=True, tight=None):
 
     df = df.copy()
 
@@ -21,7 +21,7 @@ def mcmc(df, train_g=False, train_y=True, train_inc=True, train_d=True, tight=No
     params = ['Inc', 'e_Inc', 'D', 'e_D']
     reference = df.groupby('Galaxy').mean()[params]
     
-    # for g param
+    # for g param (i.e. galaxy id)
     # need to build from given df, to make sure index & orders match up etc
     if 'gidx' not in df.columns:
         uniqs = df.Galaxy.unique()
@@ -32,6 +32,7 @@ def mcmc(df, train_g=False, train_y=True, train_inc=True, train_d=True, tight=No
         
         # Universal priors
         if train_g:
+            # gamma adjusts the k factor
             gamma = pm.Uniform('gamma', 0.5, 2000)
         else:
             gamma = 1
@@ -47,7 +48,10 @@ def mcmc(df, train_g=False, train_y=True, train_inc=True, train_d=True, tight=No
             dist = DistanceNormal('D', mu=reference.D, sigma=reference.e_D/TIGHT['D'], dims='Galaxy')
 
         if train_y:
-            Ymass = pm.Normal('Ymass', mu=1.0, sigma=1/TIGHT['Ymass'], dims='Galaxy')
+            if y_uni:
+                Ymass = pm.Uniform('Ymass', 0.1, 200, dims='Galaxy')
+            else:
+                Ymass = pm.Normal('Ymass', mu=1.0, sigma=1/TIGHT['Ymass'], dims='Galaxy')
 
         # Data
         sparc_inc = pm.Data("sparc_inc", reference.Inc, dims="Galaxy")
@@ -80,7 +84,6 @@ def mcmc(df, train_g=False, train_y=True, train_inc=True, train_d=True, tight=No
         obs = pm.Normal("obs", mu=Vpred, sigma=df.e_Vobs, observed=df.Vobs, dims="Observation")
     
     return galaxy_model
-
 
 
 

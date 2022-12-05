@@ -14,7 +14,7 @@ from references.sparc import adjustment_df
 class Tune:
 
     UNIVERSE = ['gamma',]
-    GALAXY = ['Inc', 'D', 'Ymass']
+    GALAXY = ['Inc', 'D', 'Ymass', 'nu']
 
     def __init__(self, model, name=None, null_function=None):
         self.name = name
@@ -123,12 +123,12 @@ class Tune:
             ylims={'Inc': (0,100), 'D': (-10,None), 'Ymass': (0,2)},
             ylabels={'Inc': 'Inclination (Degrees)', 'D': 'Distance (Mpc)', 'Ymass': 'Mass/Luminosity adjustment'},
             xlabel="Galaxy in order of SPARC reference parameter value",
-            title="Nuisance parameters", label='SMOG'):
+            title="Nuisance parameters", label='SMOG', figsize=(10,5)):
     
         adjs, params = self.adjs, self.params_galaxy
         
         # clean data
-        fig, axes = plt.subplots(len(params), 1, figsize=(20,10))
+        fig, axes = plt.subplots(len(params), 1, figsize=figsize)
         if len(params) == 1: axes = [axes]
         def_adjs = adjustment_df()
         select_params = ['Galaxy']
