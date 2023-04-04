@@ -1,6 +1,8 @@
-# Potential-Modification Of Gravity
+# Galactus
 
-Welcome to the open-source code supporting the initial work around P-MOG. An adjustment to special relativity which corrects for 
+Welcome to the open-source code supporting the initial work around the paper `Demonstrating inertial relativistic effects on galactic rotation curves`. Which corrects for effects in special and general relativity which are commonly thought to be neglible.
+
+A whole new framework needed to be created in order to support these trials, as others relied on Poisson solvers. The code is pretty well structured, but the documentation and testing is not at the level you'd typically expect from a fully fledged framework. If you'd like to contribute or use this framework, that's amazing! Please get in touch and I'll give you hand and I'd love your contributions.
 
 
 ## Installation
@@ -9,8 +11,8 @@ You'll want to do this whichever way you're used to doing it. However, below is 
 
 ### Create a new virtual environment
 ```
-python3 -m venv pmog;
-cd pmog;
+python3 -m venv galactus;
+cd galactus;
 source bin/activate;
 ```
 
@@ -19,8 +21,8 @@ source bin/activate;
 Here you'll likely want to clone a fork of the repo if you're going to do anything beyond recreate the published results.
 
 ```
-git clone git@github.com:timjdavey/pmog.git;
-cd pmog;
+git clone git@github.com:timjdavey/galactus.git;
+cd galactus;
 python -m pip install --upgrade pip;
 ```
 
@@ -41,7 +43,7 @@ python gen_ratio.py;
 ```
 This is with the exception of the mcmc tuning, which is done in a notebook.
 
-Where `baseline` creates the standard, newtonian results. `pmog` creates the full `tau prime` adjustment from the paper. `ratio` creates just the simple `tau` (ratio of the potentials) adjustment.
+Where `baseline` creates the standard, newtonian results. `pmog` (partial mass of galaxy) creates the full `tau_B` adjustment from the paper. `ratio` (ratio of the potentials) creates just the simple `tau_A` adjustment.
 
 
 ### Quick versions
