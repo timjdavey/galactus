@@ -137,7 +137,7 @@ class Result:
                 else:
                     x, y = '%sgbar' % iden, 'gobs'
                     lx, ly = np.log10(df[x]), np.log10(df[y])
-                    ylabel = 'Log($g_{obs}$) [$ms^{-2}$]'
+                    ylabel = 'Log($g_O$) [$ms^{-2}$]'
                     xlabel = label
                 
                 # M coloured scatter
