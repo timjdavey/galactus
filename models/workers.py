@@ -20,29 +20,26 @@ def map_worker(position):
     return gravity_worker(position, global_masses, global_scale, None, 1)
 
 
-def pmog_worker(position):
-    """Works out the Force using the pmog equation"""
+def ratio_worker(position):
+    """Works out the Force using the ratio equation"""
     return gravity_worker(position, global_masses, global_scale, global_smap, 2)
 
 
-def ratio_worker(position):
+def energy_worker(position):
     """Works out the Force using the ratio equation"""
     return gravity_worker(position, global_masses, global_scale, global_smap, 3)
 
 
-def gradient_worker(position):
-    """Works out the Force using the ratio equation"""
+def tao_worker(position):
+    """Works out the Force using the tao equation"""
     return gravity_worker(position, global_masses, global_scale, global_smap, 4)
 
 
-def masses_worker(position):
-    """Works out the Force using the ratio equation"""
-    return gravity_worker(position, global_masses, global_scale, global_smap, 5)
-
-
-def potentials_worker(position):
-    """Works out the Force using the ratio equation"""
-    return gravity_worker(position, global_masses, global_scale, global_smap, 6)
+VARIANTS = {
+    "ratio": ratio_worker,
+    "energy": energy_worker,
+    "tao": tao_worker,
+}
 
 
 def gravity_worker(position, masses, scale, smap, mode):
@@ -56,9 +53,9 @@ def gravity_worker(position, masses, scale, smap, mode):
     # convert that to r^3 to normalise vectors in each axis
     r = np.sqrt(np.sum(r_vec**2, axis=0))
     # handle the divide by zero error for it's current position
-    # but putting current position at effectively infinity
+    # by moving it slightly away
     try:
-        r[p] = scale  # 1e6
+        r[p] = scale / 10
     except IndexError:
         # IndexError occurs when simulation too small
         # for the last position occassionally
@@ -91,13 +88,17 @@ def gravity_worker(position, masses, scale, smap, mode):
             # r is distance from current point, rather than centre here
             # but don't want to rename as will duplicate matrix for performance
 
-            # tao
-            if mode == 2:
-                adj = (u / u[p]) * np.sqrt((k * r * m[p] / (u * m)) + 1)
-
             # ratio
-            elif mode == 3:
+            if mode == 2:
                 adj = u / u[p]
+
+            # energy
+            elif mode == 3:
+                adj = np.sqrt((k * r / u) * (m[p] / m) + 1)
+
+            # tao
+            elif mode == 4:
+                adj = (u / u[p]) * np.sqrt((k * r / u) * (m[p] / m) + 1)
 
             g_comp = -mass * adj * r_vec / r3
             g_vec = [np.sum(arr) for arr in g_comp]
