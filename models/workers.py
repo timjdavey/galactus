@@ -44,6 +44,7 @@ VARIANTS = {
 
 def gravity_worker(position, masses, scale, smap, mode):
     p = tuple(position)
+    ln = np.linalg.norm
 
     # matrix of distances in indices space from position
     indices = np.indices(masses.shape[1:])
@@ -51,7 +52,7 @@ def gravity_worker(position, masses, scale, smap, mode):
 
     # |r|^2 square the norm
     # convert that to r^3 to normalise vectors in each axis
-    r = np.sqrt(np.sum(r_vec**2, axis=0))
+    r = ln(r_vec, axis=0)
     # handle the divide by zero error for it's current position
     # by moving it slightly away
     try:
@@ -74,31 +75,54 @@ def gravity_worker(position, masses, scale, smap, mode):
 
         # Generate absolute potential map
         elif mode == 1:
-            g_comp = -mass * r_vec / r3
-            g_norm = np.sqrt(np.sum(g_comp**2, axis=0))
-            potential = np.sum(g_norm * r)
-            m_frame = np.sum(mass * np.exp(-r))
-            results.append([potential, m_frame])
+            # g_comp = -mass * r_vec / r3
+            # f_net = [np.sum(arr) for arr in g_comp]
+            # f_abs = [np.sum(np.abs(arr)) for arr in g_comp]
+
+            # g_norm = ln(g_comp, axis=0)
+            simple_potential = np.sum(mass / r)
+            # norm_potential = np.sum(g_norm * r)
+            vec_potential = np.sum(ln(-mass * r_vec / (r**2)))
+            # m_frame = np.sum(mass * np.exp(-r))
+            summ = np.sum(mass)
+            results.append(
+                # [norm_potential, vec_potential, simple_potential, m_frame, summ]
+                [simple_potential, vec_potential, summ]
+            )
 
         # Generate pmog or ratio
         else:
             # potential, diff, mass frame, constant
-            u, m, k = smap
+            # nu, vu, u, m, summ, k = smap
+            u, vu, summ, k = smap
 
             # r is distance from current point, rather than centre here
             # but don't want to rename as will duplicate matrix for performance
 
             # ratio
             if mode == 2:
-                adj = u / u[p]
+                # adj = vu / vu[p]
+                # adj = (vu / vu[p]) * ((m[p] / m))
+                adj = (u / u[p]) * (40000 / summ)
 
             # energy
             elif mode == 3:
-                adj = np.sqrt((k * r / u) * (m[p] / m) + 1)
+                # adj = (vu / vu[p]) * np.sqrt(u[p] / u) # 0.08
+                # adj = (vu / vu[p]) * np.sqrt((u[p] / u) ** 0.5)
+                # adj = (vu / vu[p]) * ((m[p] / m) + 1) / 2  # 0.07
+                # adj = (nu / nu[p]) * np.sqrt((k * r / u) * (m[p] / m) + 1)
+                # adj = (u / u[p]) / np.sqrt(summ)
+                adj = (vu / vu[p]) * (150 / summ**0.25)
 
             # tao
             elif mode == 4:
-                adj = (u / u[p]) * np.sqrt((k * r / u) * (m[p] / m) + 1)
+                # adj = (nu / nu[p]) * np.sqrt((k * r / nu) * (m[p] / m) + 1)
+                # adj = np.sqrt(f_abs / f_abs[p]) good sub for nu
+                # adj = np.sqrt(k * r / nu)
+                # adj = (vu / vu[p]) * ((m[p] / m) + 1) / 2
+                # adj = (vu / vu[p]) * (m[p] / m) * (u[p] / u)
+                # adj = u / u[p]  # (vu / vu[p]) * ((m[p] / m) + 1)
+                adj = (vu / vu[p]) * (12 / summ**0.1)
 
             g_comp = -mass * adj * r_vec / r3
             g_vec = [np.sum(arr) for arr in g_comp]

@@ -31,6 +31,8 @@ def augment_df(sim, adf=None, R=None, G=None):
     mrs = MASS_RATIOS.copy()
 
     # then override params
+    # using the adjustment dataframe if supplied
+    # from the tuning process
     distance, inclination = None, None
     if adf is not None:
         # baseline Lelli
@@ -46,6 +48,8 @@ def augment_df(sim, adf=None, R=None, G=None):
             inclination = adf.Inc.values[0]
 
     # store Y's & M's
+    # if using Ymass from combine_masses()
+    # rather than individual Y's
     if adf is not None and "Ymass" in adf:
         Ymass = adf.Ymass.values[0]
         for k, v in mrs.items():
@@ -53,6 +57,7 @@ def augment_df(sim, adf=None, R=None, G=None):
         df["Ymass"] = Ymass
 
     else:
+        # otherwise override individually
         for key, value in mrs.items():
             df["Y%s" % key] = value
             ekey = "e_Y%s" % key
@@ -120,10 +125,9 @@ def augment_df(sim, adf=None, R=None, G=None):
         for label, cdf in components:
             cdf = cdf.set_index("x").loc[x_right_points]
 
-            def itp(ilab):
-                return np.interp(R, cdf["rd"], cdf[ilab])
-
-            df["F_%s" % label] = itp("x_vec")
+            # we only care about the x-vector, as that's the inward force pull
+            # the other vectors should be symmetrical and won't count towards velocity
+            df["F_%s" % label] = np.interp(R, cdf["rd"], cdf["x_vec"])
             df["S%s" % label] = velocity(R, df["F_%s" % label])
 
         # combine components

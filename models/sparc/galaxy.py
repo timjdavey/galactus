@@ -1,13 +1,8 @@
-import pickle
-import numpy as np
-import pandas as pd
-
+import time
 from models.space import Space
 from models.galaxy import Galaxy
 from models.load import load_sparc
-from models.sparc.profile import MASS_RATIOS
 from models.workers import map_worker, newtonian_worker
-from models.params import k as pmog_k
 
 
 def generate_galaxy(
@@ -15,17 +10,10 @@ def generate_galaxy(
     space_points=300,
     z=1,
     excess_ratio=1.5,
-    calc_points=0,
-    rotmass_points=True,
-    cp=None,
     worker=newtonian_worker,
-    fit=False,
 ):
     """
     Generates a sparc galaxy given a profile
-
-    :rotmass_points: bool, whether to run for the points in the sparc rotmass file
-    :calc_points: int, total number of even points to create if want a general picture of profile
     :cp: for logging
     :fit: whether to fit the simulation to Lelli model for non-flat models
     """
@@ -36,76 +24,67 @@ def generate_galaxy(
     )
     masses, labels = profile.masses(space)
 
-    sim = Galaxy(masses, space, worker=worker, mass_labels=labels, cp=cp)
+    sim = Galaxy(masses, space, worker=worker, mass_labels=labels)
     sim.profile = profile
     sim.name = uid
-
-    if rotmass_points:
-        sim.analyse(profile.rotmass_points(space))
-
-    if calc_points:
-        sim.analyse(sim.radius_points(profile.max_r * excess_ratio, calc_points))
-
-    if fit and z > 1:
-        sim.fit_ratios = profile.fit_simulation(sim)
-
     return sim
 
 
-def generate_map(
-    profile,
-    space_points=300,
-    z=1,
-    excess_ratio=1.5,
-    fit_ratios=None,
-    cp=None,
-    fast=True,
-):
+def generate_baselines(profiles, points, z):
     """
-    Creates a map galaxy
+    Generates basic newtonian models.
+    But also fits the masses to the Lelli model in 3D.
     """
-    # do not analyse, as need to combine masses first
-    sim = generate_galaxy(
-        profile,
-        space_points,
-        z,
-        excess_ratio,
-        rotmass_points=False,
-        calc_points=0,
-        cp=cp,
-        worker=map_worker,
-        fit=False,
-    )
-
-    if z > 1:
-        # if not flat
-        # need to fit simulation to Lelli mass model components
-        sim.combine_masses(fit_ratios)
-    else:
-        # otherwise combine masses using 0.5, 0.7, 1.0 ratios
-        sim.combine_masses(MASS_RATIOS)
-
-    if fast:
-        # do for slice & infer in galaxy_smog
-        sim.analyse(sim.space.symmetric_points)
-    else:
-        # otherwise calculate for all points
-        sim.analyse()
-    return sim
+    try:
+        return load_sparc("baseline/%s_%s" % (points, z))
+    except FileNotFoundError:
+        print("Creating baseline")
+        bases = {}
+        for name, profile in profiles.items():
+            gal = generate_galaxy(profile, points, z, fit=True)
+            # fits the masses in simulation to the Lelli model
+            # for 3D models only
+            if z > 1:
+                gal.fit_ratios = profile.fit_simulation(gal)
+            gal.save("baseline")
+        bases[name] = gal
+        return bases
 
 
-def generate_variant(profile, space_points, z, worker, pmog_k=pmog_k, fit_ratios=None):
-    """Generates for a pmog galaxy"""
-    smap = generate_map(profile, space_points, z, fit_ratios=fit_ratios)
-    vals = smap.space_maps()
-    vals.append(pmog_k)
-    gal = Galaxy(
-        smap.mass_components,
-        smap.space,
-        worker=worker,
-        mass_labels=smap.mass_labels,
-        smaps=vals,
-    )
-    gal.analyse(smap.profile.rotmass_points(smap.space))
-    gal.profile = profile
+def generate_variant(profile, space_points, z, workers, baseline, folder=None):
+    """Generates a galaxy with the variant worker"""
+
+    space_map = generate_galaxy(profile, space_points, z, worker=map_worker)
+    space_map.fit_ratios = baseline.fit_ratios
+    space_map.analyse(space_map.space.symmetric_points)
+
+    for folder, worker in workers.items():
+        gal = Galaxy(
+            space_map.mass_components,
+            space_map.space,
+            worker=worker,
+            mass_labels=space_map.mass_labels,
+            smaps=space_map.space_maps(),
+        )
+        gal.fit_ratios = baseline.fit_ratios
+
+        # only analyse for specific observations to compare against
+        gal.analyse(space_map.profile.rotmass_points(space_map.space))
+        gal.profile = profile
+        if folder:
+            gal.save(folder)
     return gal
+
+
+def generate_variants(profiles, points, z, workers, baselines):
+    print("Starting variants")
+    errors = []
+    for i, (name, profile) in enumerate(profiles.items()):
+        try:
+            tic = time.time()
+            generate_variants(profile, points, z, workers, baselines[name])
+            toc = time.time()
+            print("%s of %s %.1fs" % (i, name, toc - tic))
+        except IndexError:
+            errors.append(name)
+    print("Finished, with errors %s" % errors)
