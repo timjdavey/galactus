@@ -287,7 +287,7 @@ class Result:
         stats = []
         for key, df in self.datasets().items():
             data = np.log10(df["gobs"] / (df[resid]))
-            mse = 1  # mean_squared_error(data, np.zeros((len(data))))
+            mse = mean_squared_error(data, np.zeros((len(data))))
             stats.append(
                 {
                     "filter": key,

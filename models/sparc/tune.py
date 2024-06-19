@@ -50,16 +50,13 @@ class Tune:
         """Same as adjustment_df but uses
         the fast MAP params rather than
         the full posterior mean values"""
-        if self.params_galaxy:
-            data = {"Galaxy": self.model.coords["Galaxy"]}
-            for p in self.params_galaxy:
-                data[p] = self.MAP[p]
-                data["e_%s" % p] = data[p] * 0.1  # dummy 10%
-            df = pd.DataFrame(data)
-            df["Source"] = self.name
-            return df
-        else:
-            return None
+        data = {"Galaxy": self.model.coords["Galaxy"]}
+        for p in self.params_galaxy:
+            data[p] = self.MAP[p]
+            data["e_%s" % p] = data[p] * 0.1  # dummy 10%
+        df = pd.DataFrame(data)
+        df["Source"] = self.name
+        return df
 
     def adjustment_FULL(self):
         """The per galaxy settings to create a new

@@ -142,14 +142,18 @@ def augment_df(sim, adf=None, R=None):
     # set defaults
     if distance is not None:
         df["distance_adj"] = distance / sim.profile.sparc_dict["D"]
-        R = R * df["distance_adj"]  # for velocity later
+        # don't just R, as this impacts velocity conversions
+        # we don't adjust this value during MCMC
+        # and since we're looking at the ratio, it doesn't matter
+        # R = R * df["distance_adj"]
 
         # F is calculated as F (which is actually g) g = GM/R^2
         # so need to update the R^2
         df["F"] /= df["distance_adj"] ** 2
 
-        # update original sparc values to newly supplied versions
-        df["R"] = R
+        # don't update original sparc values as R is actually used
+        # it's not just a reference value
+        # df["R"] = R * df["distance_adj"]
         df["D"] = distance
 
     # Observations which compare against

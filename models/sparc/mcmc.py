@@ -9,12 +9,13 @@ TIGHT = {"Inc": 1, "D": 1, "Ydisk": 1, "Ybul": 1}
 
 def mcmc(
     df,
+    mode,
     train_k=False,
-    train_b=False,
     train_n=False,
-    train_y=True,
-    train_inc=True,
+    train_y=False,
+    train_inc=False,
     train_d=False,
+    train_b=False,
     tight=None,
 ):
     df = df.copy()
@@ -23,6 +24,17 @@ def mcmc(
 
     if tight:
         TIGHT.update(tight)
+
+    if mode == "kn":
+        train_k, train_n = True, True
+    elif mode == "max":
+        train_b, train_y = True, True
+    elif mode == "yid":
+        train_y, train_inc = True, True
+    elif mode == "all":
+        train_k, train_n, train_y, train_inc = True, True, True, True
+    else:
+        raise ValueError("Unknown training mode.")
 
     # using the ref values as the initial reference points
     params = ["Inc", "e_Inc", "D", "e_D", "M_bul", "M_disk", "M_gas"]
@@ -127,9 +139,9 @@ def mcmc(
         Force = 0
         if train_n:
             for i, f in enumerate(force_components):
-                r = ratio_components[i]
+                ratio = ratio_components[i]
                 m = mass_components[i]
-                Force += f * r / ((m * r) ** nu)
+                Force += f * ratio / ((m * ratio) ** nu)
         else:
             for i, f in enumerate(force_components):
                 Force += f * ratio_components[i]
