@@ -2,20 +2,20 @@ import pickle
 import numpy as np
 import pandas as pd
 
-DIR = '../generations/'
+DIR = "../generations/"
+
 
 def load(filename, directory=DIR, masses=True):
     """
     Loads a pickled simulation from experiments with a given filename.
     """
-    with open("%s%s.pickle" % (directory,filename), 'rb') as f:
+    with open("%s%s.pickle" % (directory, filename), "rb") as f:
         sim = pickle.load(f)
-    
+
     if masses:
-        with open("%s%s.npy" % (directory,filename), 'rb') as f:
+        with open("%s%s.npy" % (directory, filename), "rb") as f:
             sim.mass_components = np.load(f)
-    
-    sim.log("Loaded %s" % filename)
+
     return sim
 
 
@@ -26,7 +26,9 @@ def load_sparc(namespace, profiles=None, directory=DIR, ignore=True, masses=Fals
     we update the model with extra functions etc
     """
     from models.sparc.profile import generate_profiles
-    if profiles is None: profiles = generate_profiles()
+
+    if profiles is None:
+        profiles = generate_profiles()
 
     simulations = {}
     for uid, prof in profiles.items():
@@ -38,5 +40,6 @@ def load_sparc(namespace, profiles=None, directory=DIR, ignore=True, masses=Fals
             if ignore:
                 pass
             else:
+                print("Missing", uid)
                 raise FileNotFoundError(uid)
     return simulations

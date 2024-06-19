@@ -1,15 +1,8 @@
-import copy
 import time
 import numpy as np
 import pandas as pd
-import seaborn as sns
-import itertools
-import matplotlib.pyplot as plt
-from functools import cached_property
-from multiprocessing import Pool, cpu_count
-from matplotlib.colors import LogNorm
-from .space import Space
-from .memory import memory_usage
+
+from multiprocessing import Pool
 from .workers import newtonian_worker, initializer
 
 Gkg = 6.67430 * (10**-11)  # m3 kg-1 s-2
@@ -60,7 +53,7 @@ class Simulation:
     def analyse(self, sub_list=None, verbose=False, processes=8):
         """Main function to generate the results"""
         tic = time.perf_counter()
-        point_list = self.space.list if sub_list is None else sub_list
+        point_list = self.space.symmetric_points if sub_list is None else sub_list
         tasks = self.space.count if sub_list is None else len(sub_list)
         count = 0
 
@@ -71,21 +64,18 @@ class Simulation:
             processes, initializer, (self.mass_components, self.space.scale, self.smaps)
         ) as pool:
             for p, r in pool.imap_unordered(self.worker, point_list, chunksize):
-                if verbose:
-                    self.log("%s of %s completed %s" % (count, tasks, memory_usage()))
                 self.results[p] = r
                 count += 1
 
         toc = time.perf_counter()
-        self.log("completed in %.2f seconds" % (toc - tic))
 
-    def space_map(self, result_index=0, mass_component=0, fast=True):
+    def space_map(self, value_key, mass_component):
         """Generates an array of the scalar values for all space"""
         smap = self.space.blank()
         fast = self.space.count != len(self.results)
 
         for p, vals in self.results.items():
-            v = vals[mass_component][result_index]
+            v = vals[mass_component][value_key]
             if fast:
                 z, y, x = p
                 for i, j in ((y, x), (x, y)):
@@ -96,23 +86,23 @@ class Simulation:
                         smap[k][-i - 1][-j - 1] = v
             else:
                 smap[p] = v
-        return smap * self.G
+        return smap
 
-    def space_maps(self, mass_index=0):
-        """Generates for all maps, for a given mass_component (default just 1 as likely combined)"""
-        return [
-            self.space_map(i)
-            for i in range(len(list(self.results.values())[0][mass_index]))
-        ]
+    def space_maps(self):
+        """Turns the results from maps into a array of dicts"""
+        maps_by_mass = []
+        for i in range(len(self.mass_labels)):
+            map_by_value = {}
+            # get the keys from a map_worker result
+            for key in self.results[(0, 0, 0)][0].keys():
+                map_by_value[key] = self.space_map(key, i)
+            maps_by_mass.append(map_by_value)
+        return maps_by_mass
 
-    def dataframe(self, mass_ratios=False, combined=False):
+    def dataframe(self):
         """Returns the results as a dataframe"""
         if len(self.results) == 0:
             raise ValueError("No results yet, please run .analyse()")
-        # So can override mass_ratios
-        # both applied later on dataframe creation
-        if mass_ratios is False:
-            mass_ratios = dict([(c, 1) for c in self.mass_labels])
 
         data = []
 
@@ -120,6 +110,7 @@ class Simulation:
             rr = {}
             for mi, component_result in enumerate(result):
                 component = self.mass_labels[mi]
+                # set the grid-index for reference for xyz
                 rr = dict([(d, ijk[di]) for di, d in enumerate(self.dimensions)])
                 rr["component"] = component
 
@@ -128,44 +119,31 @@ class Simulation:
                     rr["%s_vec" % self.dimensions[dim]] = (
                         value
                         * self.G
-                        * mass_ratios[component]
                         # we treat these seperately
                         # as they are outside of Lelli's calculations
                         * self.fit_ratios[component]
                     )
                 data.append(rr)
 
-        df = pd.DataFrame(data)
-        # Work out total F
-        df["F_vec"] = np.linalg.norm(
-            [df["%s_vec" % d] for d in self.dimensions], axis=0
-        )
-
-        if combined:
-            return df.groupby(["x", "y", "z"]).sum().reset_index()
-        else:
-            return df
-
-    def log(self, *args, **kwargs):
-        """Outputs to notebook"""
-        if self.cp is not None:
-            self.cp(*args, **kwargs)
+        return pd.DataFrame(data)
 
     def save(self, folder, masses=False):
         import pickle
 
-        filename = "%s/%s_%s" % (folder, self.space.points, self.space.z)
+        filename = "%s/%s_%s_%s" % (
+            folder,
+            self.space.points[1],
+            self.space.points[0],
+            self.profile.uid,
+        )
 
         if masses:
-            self.log("Saving %s masses" % filename)
             with open("%s.npy" % filename, "wb") as f:
                 np.save(f, self.mass_components)
         else:
-            self.log("Throwing masses away!")
             self.mass_components = None
 
-        self.log("Saving %s pickle" % filename)
         with open("%s.pickle" % filename, "wb") as fh:
             pickle.dump(self, fh)
 
-        self.log("Complete")
+        print("Saved", filename)

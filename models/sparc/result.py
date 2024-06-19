@@ -4,10 +4,8 @@ import seaborn as sns
 import scipy as sp
 import matplotlib.pyplot as plt
 
-from models.load import load_sparc
 from models.sparc.dataframe import augment_df
 from models.sparc.profile import COLOR_SCHEME
-from models.equations import velocity
 
 
 ANALYSIS = {
@@ -150,7 +148,7 @@ class Result:
         query_key=None,
         title=None,
         size=5,
-        line=[-12, -8],
+        line=[-15, -11],
         velocity=False,
         label="Log($g_{pre}$) [$ms^{-2}$]",
         axis=None,

@@ -9,7 +9,7 @@ from models.workers import VARIANTS
 
 
 if __name__ == "__main__":
-    profiles = quality_profiles(3)
+    profiles = quality_profiles(1)
     points, z = large_points, large_z
 
     baselines = generate_baselines(profiles, points, z)

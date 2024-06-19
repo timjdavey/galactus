@@ -1,58 +1,29 @@
 import numpy as np
+from functools import wraps
+
 
 global_masses, global_scale, global_smap = None, None, None
 
 
 def initializer(init_masses, init_scale, init_smap):
+    """Gets the global variables to be in the shared memory space"""
     global global_masses
     global global_scale
     global global_smap
     global_masses, global_scale, global_smap = init_masses, init_scale, init_smap
 
 
-def newtonian_worker(position):
-    """Just works out standard Newtonian gravity"""
-    return gravity_worker(position, global_masses, global_scale, None, 0)
-
-
-def map_worker(position):
-    """Works out the pmog values needed to generate the maps"""
-    return gravity_worker(position, global_masses, global_scale, None, 1)
-
-
-def ratio_worker(position):
-    """Works out the Force using the ratio equation"""
-    return gravity_worker(position, global_masses, global_scale, global_smap, 2)
-
-
-def energy_worker(position):
-    """Works out the Force using the ratio equation"""
-    return gravity_worker(position, global_masses, global_scale, global_smap, 3)
-
-
-def tao_worker(position):
-    """Works out the Force using the tao equation"""
-    return gravity_worker(position, global_masses, global_scale, global_smap, 4)
-
-
-VARIANTS = {
-    "ratio": ratio_worker,
-    "energy": energy_worker,
-    "tao": tao_worker,
-}
-
-
-def gravity_worker(position, masses, scale, smap, mode):
+def gravity_worker(position, size, scale):
+    """Sets up the variables"""
     p = tuple(position)
-    ln = np.linalg.norm
 
     # matrix of distances in indices space from position
-    indices = np.indices(masses.shape[1:])
+    indices = np.indices(size)
     r_vec = np.array([(indices[i] - c) * scale for i, c in enumerate(p)])
 
     # |r|^2 square the norm
     # convert that to r^3 to normalise vectors in each axis
-    r = ln(r_vec, axis=0)
+    r = np.linalg.norm(r_vec, axis=0)
     # handle the divide by zero error for it's current position
     # by moving it slightly away
     try:
@@ -61,71 +32,64 @@ def gravity_worker(position, masses, scale, smap, mode):
         # IndexError occurs when simulation too small
         # for the last position occassionally
         pass
-    r3 = r**3
+    return r, r_vec
 
+
+def map_worker(position):
+    """Works out the per grid space values needed for the specific position calcs"""
+    r, r_vec = gravity_worker(position, global_masses.shape[1:], global_scale)
     results = []
-    for mass in masses:
-        # Newtonian
-        if mode == 0:
-            # is split across entire space
-            g_comp = -mass * r_vec / r3
-            # collapses into single z,y,x (or flexible num of dimensions)
+    for mass in global_masses:
+        vec = -mass * r_vec / (r**2)
+        results.append(
+            {
+                "u": np.sum(mass / r),
+                "vu": np.sum(np.linalg.norm(vec, axis=0)),
+            }
+        )
+    return position, results
+
+
+def variant_wrapper(func):
+    @wraps(func)
+    def wrap(position):
+        r, r_vec = gravity_worker(position, global_masses.shape[1:], global_scale)
+        results = []
+        for i, mass in enumerate(global_masses):
+            adj = func(position, global_smap[i] if global_smap else None, r)
+            g_comp = -mass * adj * r_vec / r**3
             g_vec = [np.sum(arr) for arr in g_comp]
             results.append([g_vec])
+        return position, results
 
-        # Generate absolute potential map
-        elif mode == 1:
-            # g_comp = -mass * r_vec / r3
-            # f_net = [np.sum(arr) for arr in g_comp]
-            # f_abs = [np.sum(np.abs(arr)) for arr in g_comp]
+    return wrap
 
-            # g_norm = ln(g_comp, axis=0)
-            simple_potential = np.sum(mass / r)
-            # norm_potential = np.sum(g_norm * r)
-            vec_potential = np.sum(ln(-mass * r_vec / (r**2)))
-            # m_frame = np.sum(mass * np.exp(-r))
-            summ = np.sum(mass)
-            results.append(
-                # [norm_potential, vec_potential, simple_potential, m_frame, summ]
-                [simple_potential, vec_potential, summ]
-            )
 
-        # Generate pmog or ratio
-        else:
-            # potential, diff, mass frame, constant
-            # nu, vu, u, m, summ, k = smap
-            u, vu, summ, k = smap
+@variant_wrapper
+def newtonian_worker(p, smap, r):
+    """Just works out standard Newtonian gravity"""
+    return 1
 
-            # r is distance from current point, rather than centre here
-            # but don't want to rename as will duplicate matrix for performance
 
-            # ratio
-            if mode == 2:
-                # adj = vu / vu[p]
-                # adj = (vu / vu[p]) * ((m[p] / m))
-                adj = (u / u[p]) * (40000 / summ)
+@variant_wrapper
+def standard_worker(p, smap, r):
+    i = smap["u"]
+    return i / i[p]
 
-            # energy
-            elif mode == 3:
-                # adj = (vu / vu[p]) * np.sqrt(u[p] / u) # 0.08
-                # adj = (vu / vu[p]) * np.sqrt((u[p] / u) ** 0.5)
-                # adj = (vu / vu[p]) * ((m[p] / m) + 1) / 2  # 0.07
-                # adj = (nu / nu[p]) * np.sqrt((k * r / u) * (m[p] / m) + 1)
-                # adj = (u / u[p]) / np.sqrt(summ)
-                adj = (vu / vu[p]) * (150 / summ**0.25)
 
-            # tao
-            elif mode == 4:
-                # adj = (nu / nu[p]) * np.sqrt((k * r / nu) * (m[p] / m) + 1)
-                # adj = np.sqrt(f_abs / f_abs[p]) good sub for nu
-                # adj = np.sqrt(k * r / nu)
-                # adj = (vu / vu[p]) * ((m[p] / m) + 1) / 2
-                # adj = (vu / vu[p]) * (m[p] / m) * (u[p] / u)
-                # adj = u / u[p]  # (vu / vu[p]) * ((m[p] / m) + 1)
-                adj = (vu / vu[p]) * (12 / summ**0.1)
+@variant_wrapper
+def vector_worker(p, smap, r):
+    i = smap["vu"]
+    return i / i[p]
 
-            g_comp = -mass * adj * r_vec / r3
-            g_vec = [np.sum(arr) for arr in g_comp]
-            results.append([g_vec])
 
-    return (position, results)
+@variant_wrapper
+def zerg_worker(p, smap, r):
+    i = smap["vu"]
+    return i / i[p]
+
+
+VARIANTS = {
+    "standard": standard_worker,
+    "vector": vector_worker,
+}

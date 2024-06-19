@@ -36,18 +36,21 @@ def generate_baselines(profiles, points, z):
     But also fits the masses to the Lelli model in 3D.
     """
     try:
-        return load_sparc("baseline/%s_%s" % (points, z))
+        bases = load_sparc("baseline/%s_%s" % (points, z), profiles, ignore=False)
+        print("Loaded baselines")
+        return bases
     except FileNotFoundError:
-        print("Creating baseline")
+        print("Starting baselines")
         bases = {}
         for name, profile in profiles.items():
-            gal = generate_galaxy(profile, points, z, fit=True)
+            gal = generate_galaxy(profile, points, z)
+            gal.analyse(gal.profile.rotmass_points(gal.space))
             # fits the masses in simulation to the Lelli model
             # for 3D models only
             if z > 1:
                 gal.fit_ratios = profile.fit_simulation(gal)
             gal.save("baseline")
-        bases[name] = gal
+            bases[name] = gal
         return bases
 
 
@@ -71,20 +74,24 @@ def generate_variant(profile, space_points, z, workers, baseline, folder=None):
         # only analyse for specific observations to compare against
         gal.analyse(space_map.profile.rotmass_points(space_map.space))
         gal.profile = profile
-        if folder:
-            gal.save(folder)
+        gal.save(folder)
     return gal
 
 
 def generate_variants(profiles, points, z, workers, baselines):
-    print("Starting variants")
+    print("Starting variants for %s profiles" % len(profiles))
+    count = len(profiles)
     errors = []
     for i, (name, profile) in enumerate(profiles.items()):
         try:
             tic = time.time()
-            generate_variants(profile, points, z, workers, baselines[name])
-            toc = time.time()
-            print("%s of %s %.1fs" % (i, name, toc - tic))
+            generate_variant(profile, points, z, workers, baselines[name])
+            elapsed = time.time() - tic
+            left = (elapsed * (count - i - 1)) / 60
+            print(
+                "%s of %s %s %.1fs taken, %.1fm left\n"
+                % (i + 1, count, name, elapsed, left)
+            )
         except IndexError:
             errors.append(name)
     print("Finished, with errors %s" % errors)

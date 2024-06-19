@@ -2,7 +2,6 @@ import sys
 
 sys.path.append("../")
 
-import time
 from models.params import flat_points
 from models.sparc.profile import quality_profiles
 from models.sparc.galaxy import generate_baselines, generate_variants
