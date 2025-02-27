@@ -40,11 +40,10 @@ def map_worker(position):
     r, r_vec = gravity_worker(position, global_masses.shape[1:], global_scale)
     results = []
     for mass in global_masses:
-        vec = -mass * r_vec / (r**2)
         results.append(
             {
                 "u": np.sum(mass / r),
-                "vu": np.sum(np.linalg.norm(vec, axis=0)),
+                "vu": np.sum(np.linalg.norm(-mass * r_vec / (r**2), axis=0)),
             }
         )
     return position, results
@@ -56,7 +55,7 @@ def variant_wrapper(func):
         r, r_vec = gravity_worker(position, global_masses.shape[1:], global_scale)
         results = []
         for i, mass in enumerate(global_masses):
-            adj = func(position, global_smap[i] if global_smap else None, r)
+            adj = func(position, global_smap[i] if global_smap else None)
             g_comp = -mass * adj * r_vec / r**3
             g_vec = [np.sum(arr) for arr in g_comp]
             results.append([g_vec])
@@ -66,25 +65,19 @@ def variant_wrapper(func):
 
 
 @variant_wrapper
-def newtonian_worker(p, smap, r):
+def newtonian_worker(p, smap):
     """Just works out standard Newtonian gravity"""
     return 1
 
 
 @variant_wrapper
-def standard_worker(p, smap, r):
+def standard_worker(p, smap):
     i = smap["u"]
     return i / i[p]
 
 
 @variant_wrapper
-def vector_worker(p, smap, r):
-    i = smap["vu"]
-    return i / i[p]
-
-
-@variant_wrapper
-def zerg_worker(p, smap, r):
+def vector_worker(p, smap):
     i = smap["vu"]
     return i / i[p]
 

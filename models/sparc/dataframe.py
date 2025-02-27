@@ -33,7 +33,7 @@ def augment_df(sim, adf=None, R=None):
 
     # set default overrides
     mrs = MASS_RATIOS.copy()
-    distance, inclination = None, None
+    distance, inclination, nu, upsilon = None, None, None, None
     R = df["R"]
 
     # then adjust them for plots once done only
@@ -44,8 +44,10 @@ def augment_df(sim, adf=None, R=None):
             mrs = {
                 "disk": adf.Ydisk.values[0],
                 "bul": adf.Ybul.values[0],
-                "gas": adf.Ygas.values[0],
+                "gas": 1,
             }
+            if "gas" in adf:
+                mrs["gas"] = adf.Ygas.values[0]
             # apply these to df for reference only
             # these updates can be applied here
             # as mrs defaults are fixed
@@ -107,8 +109,9 @@ def augment_df(sim, adf=None, R=None):
         F_x *= df["Y%s_adj" % label]
 
         # do the nu adjustment with /total_mass**nu
-        if adf is not None and "nu" in adf:
-            F_x /= df["M_%s" % label] ** nu
+        if adf is not None:
+            if "nu" in adf:
+                F_x /= df["M_%s" % label] ** nu
 
         df["F_%s" % label] = F_x
         F_combined += F_x

@@ -10,31 +10,20 @@ TIGHT = {"Inc": 1, "D": 1, "Ydisk": 1, "Ybul": 1}
 def mcmc(
     df,
     mode,
-    train_k=False,
-    train_n=False,
-    train_y=False,
-    train_inc=False,
-    train_d=False,
-    train_b=False,
     tight=None,
+    normals=True,
 ):
     df = df.copy()
 
     coords = {"Galaxy": df.Galaxy.unique(), "Observation": df.Vobs.index}
 
     if tight:
-        TIGHT.update(tight)
-
-    if mode == "kn":
-        train_k, train_n = True, True
-    elif mode == "max":
-        train_b, train_y = True, True
-    elif mode == "yid":
-        train_y, train_inc = True, True
-    elif mode == "all":
-        train_k, train_n, train_y, train_inc = True, True, True, True
+        new_tight = TIGHT.copy()
+        for k, v in tight.items():
+            new_tight[k] = v
+        tight = new_tight
     else:
-        raise ValueError("Unknown training mode.")
+        tight = TIGHT
 
     # using the ref values as the initial reference points
     params = ["Inc", "e_Inc", "D", "e_D", "M_bul", "M_disk", "M_gas"]
@@ -73,86 +62,87 @@ def mcmc(
         mass_components = (mass_bul[galaxy], mass_disk[galaxy], mass_gas[galaxy])
 
         # Universal priors
-        if train_k:
+        if "k" in mode:
             # kappa adjusts universal multipler
             kappa = pm.Uniform("kappa", 0.0001, 10e20)
 
-        if train_n:
+        if "n" in mode:
             # power to which total mass is divided
             nu = pm.Uniform("nu", 0.1, 1)
 
         # Galaxy priors
-        if train_b:
+        if "b" in mode:
             # magnitude on a per galaxy basis
             beta = pm.Uniform("beta", 0.0001, 10e20, dims="Galaxy")
 
-        if train_inc:
-            # As per method of RAR paper
-            DegreesNormal = pm.Bound(pm.Normal, lower=0.0, upper=90.0)
-            inc = DegreesNormal(
-                "Inc",
-                mu=reference.Inc,
-                sigma=reference.e_Inc / TIGHT["Inc"],
-                dims="Galaxy",
-            )
+        if "i" in mode:
+            if normals:
+                # As per method of RAR paper
+                DegreesNormal = pm.Bound(pm.Normal, lower=0.0, upper=90.0)
+                inc = DegreesNormal(
+                    "Inc",
+                    mu=reference.Inc,
+                    sigma=reference.e_Inc / tight["Inc"],
+                    dims="Galaxy",
+                )
+            else:
+                inc = pm.Uniform("Inc", 0.0, 90.0, dims="Galaxy")
 
-        if train_d:
+        if "d" in mode:
             # trains distance and R
             DistanceNormal = pm.Bound(pm.Normal, lower=0.1)
             dist = DistanceNormal(
-                "D", mu=reference.D, sigma=reference.e_D / TIGHT["D"], dims="Galaxy"
+                "D", mu=reference.D, sigma=reference.e_D / tight["D"], dims="Galaxy"
             )
 
-        if train_y:
-            # trains surface mass ratios
-            SurfaceNormal = pm.Bound(
-                pm.Normal, lower=0.2, upper=1.2
-            )  # reasonable physical bounds
-            astro_scatter = 10**0.1  # from Li's rar paper
-            Ydisk = SurfaceNormal(
-                "Ydisk",
-                mu=MASS_RATIOS["disk"],
-                sigma=MASS_RATIOS["disk"] * astro_scatter / TIGHT["Ydisk"],
-                dims="Galaxy",
-            )
-            Ybul = SurfaceNormal(
-                "Ybul",
-                mu=MASS_RATIOS["bul"],
-                sigma=MASS_RATIOS["bul"] * astro_scatter / TIGHT["Ybul"],
-                dims="Galaxy",
-            )
-            GasNormal = pm.Bound(pm.Normal, lower=0.9, upper=1.1)
-            Ygas = GasNormal(
-                "Ygas",
-                mu=MASS_RATIOS["gas"],
-                sigma=0.1,
-                dims="Galaxy",
-            )
+        if "y" in mode:
+            if normals:
+                # trains surface mass ratios
+                SurfaceNormal = pm.Bound(
+                    pm.Normal, lower=0.01, upper=1.5
+                )  # reasonable physical bounds
+                astro_scatter = 10**0.1  # from Li's rar paper
+                Ydisk = SurfaceNormal(
+                    "Ydisk",
+                    mu=MASS_RATIOS["disk"],
+                    sigma=MASS_RATIOS["disk"] * astro_scatter,
+                    dims="Galaxy",
+                )
+                Ybul = SurfaceNormal(
+                    "Ybul",
+                    mu=MASS_RATIOS["bul"],
+                    sigma=MASS_RATIOS["bul"] * astro_scatter,
+                    dims="Galaxy",
+                )
+            else:
+                Ybul = pm.Uniform("Ybul", 0.01, 1.5, dims="Galaxy")
+                Ydisk = pm.Uniform("Ydisk", 0.01, 1.5, dims="Galaxy")
             ratio_components = (
                 Ybul[galaxy] / MASS_RATIOS["bul"],
                 Ydisk[galaxy] / MASS_RATIOS["disk"],
-                Ygas[galaxy] / MASS_RATIOS["gas"],
+                1,
             )
+
         else:
             ratio_components = (1, 1, 1)
 
         Force = 0
-        if train_n:
+        if "n" in mode:
             for i, f in enumerate(force_components):
                 ratio = ratio_components[i]
                 m = mass_components[i]
-                Force += f * ratio / ((m * ratio) ** nu)
+                Force += f * ratio / (m * ratio) ** nu
         else:
             for i, f in enumerate(force_components):
                 Force += f * ratio_components[i]
 
-        if train_k:
+        if "k" in mode:
             Force *= kappa
 
-        if train_b:
+        if "b" in mode:
             Force *= beta[galaxy]
 
-        if train_d:
+        if "d" in mode:
             ratio_distance = dist[galaxy] / sparc_d[galaxy]
             Force /= ratio_distance**2
 
@@ -164,7 +154,7 @@ def mcmc(
         # adjust the prediction for inclination of Vobs
         # where this is reversed from the SPARC paper
         # as SPARC paper adjusts the observed velocity
-        if train_inc:
+        if "i" in mode:
             conv = np.pi / 180
             Velocity *= at.sin(inc[galaxy] * conv) / at.sin(sparc_inc[galaxy] * conv)
 
